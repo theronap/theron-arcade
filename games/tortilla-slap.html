@@ -150,6 +150,8 @@
   const REINFORCE_COST  =15;
   const TURRET_COST     =25;
   const BRIBE_COSTS     =[10,20,30];
+  const HEART_COST      =25;
+  const MAX_HEALTH      =5;
   const MAX_GOONS       =5;
   const NPC_SPAWN_MAX   =30;
   const GOON_COLORS     =['#FF8822','#22AAFF','#AA22FF','#22FFAA','#FF2299'];
@@ -238,6 +240,7 @@
     if(k===' '){ e.preventDefault(); if(!spaceDown){spaceDown=true;pendingSlap=true;} if(gameOver)restartGame(); }
     if(k==='e'&&!gameOver) handleE();
     if(k==='u'&&!gameOver) handleU();
+    if(k==='h'&&!gameOver) handleH();
     if(k==='t'&&!gameOver) pendingTunnel=true;
     if(k==='b'&&!gameOver) pendingBribe=true;
     if(k==='r'&&!gameOver) pendingAmmo=true;
@@ -300,6 +303,18 @@
         return;
       }
     }
+  }
+
+  // ── H KEY (buy heart) ───────────────────────────────────────────
+  function handleH(){
+    if(playerHealth>=MAX_HEALTH){
+      slapFX.push({x:player.x,y:player.y-0.8,z:2.2,t:1.0,text:'MAX HEARTS',col:'#888888'}); return;
+    }
+    if(player.money<HEART_COST){
+      slapFX.push({x:player.x,y:player.y-0.8,z:2.2,t:1.0,text:`NEED $${HEART_COST}`,col:'#FF8888'}); return;
+    }
+    player.money-=HEART_COST; playerHealth++;
+    slapFX.push({x:player.x,y:player.y-1.0,z:2.4,t:1.6,text:`+♥  (-$${HEART_COST})`,col:'#FF6688'});
   }
 
   // ── NPC FACTORIES ────────────────────────────────────────────────
@@ -379,8 +394,8 @@
   function slapNPC(n,byGoon=false,byBat=false){
     if(n.bribeLevel>0) return;
     if(!byGoon&&!n.firstSlapped){
-      n.firstSlapped=true; player.money+=2;
-      slapFX.push({x:n.x+0.4,y:n.y-0.1,z:2.2,t:0.9,text:'+$2',col:'#FFD700'});
+      n.firstSlapped=true; player.money+=5;
+      slapFX.push({x:n.x+0.4,y:n.y-0.1,z:2.2,t:0.9,text:'+$5',col:'#FFD700'});
     }
     // Combo
     combo++; comboTimer=COMBO_WINDOW;
@@ -399,6 +414,7 @@
         slapFX.push({x:n.x+0.2,y:n.y+0.1,z:2.0,t:1.0,text:'KO!!',col:'#FF44AA'});
         const idx=NPCs.indexOf(n); if(idx!==-1) NPCs.splice(idx,1); return; }
       n.state='stunned'; n.stateTimer=n.isPolice?0.9:1.6; n.health=n.maxHealth;
+      if(!byGoon&&!n.isPolice) coins.push({x:n.x+0.1+Math.random()*0.6,y:n.y+0.1+Math.random()*0.4,t:20.0});
       const base=n.isPolice?(byGoon?150:300):(byGoon?50:100);
       score+=base*mult;
       const txt=mult>1?`SLAP! ×${mult}`:'SLAP!';
@@ -698,7 +714,7 @@
     OWNERS.forEach(ow=>{ ow.hitFlash=Math.max(0,ow.hitFlash-dt*3);ow.slapAnim=Math.max(0,ow.slapAnim-dt);
       if(ow.cowed){ ow.coinTimer=Math.max(0,ow.coinTimer-dt);
         if(Math.sqrt((player.x+0.44-ow.x-0.44)**2+(player.y+0.35-ow.y-0.35)**2)<4.5&&ow.coinTimer<=0){
-          ow.coinTimer=3.2; const count=1+(Math.random()<0.35?1:0);
+          ow.coinTimer=2.0; const count=1+(Math.random()<0.50?1:0);
           for(let i=0;i<count;i++) coins.push({x:ow.stand.x+0.25+Math.random()*0.9,y:ow.stand.y+0.08+Math.random()*0.55,t:30.0});
         } } });
   }
@@ -717,7 +733,7 @@
   function checkUpgrades(){
     if(!upgrades.bat&&player.money>=BAT_COST){ upgrades.bat=true;player.money-=BAT_COST;
       slapFX.push({x:player.x,y:player.y-1,z:2.6,t:2.2,text:'BAT UNLOCKED!',col:'#FF44AA'}); return; }
-    if(goons.length<MAX_GOONS&&player.money>=GOON_COST){ player.money-=GOON_COST;
+    if(goons.length<MAX_GOONS&&player.money>=GOON_COST+10){ player.money-=GOON_COST;
       const gi=goons.length;
       goons.push({x:player.x+Math.cos(gi/MAX_GOONS*Math.PI*2)*2.2,y:player.y+Math.sin(gi/MAX_GOONS*Math.PI*2)*2.2,
         shirt:GOON_COLORS[gi%GOON_COLORS.length],hair:'#2a1810',pants:'#3a5522',walkCycle:0,walkTimer:0,slapAnim:0,slashCooldown:0});
@@ -996,8 +1012,9 @@
     ctx.fillStyle='#FFE040';ctx.fillText('TORTILLA SLAP',cv.width/2,36);
     ctx.textAlign='left';
     ctx.font='bold 13px "Courier New"';ctx.fillStyle='rgba(255,255,255,0.7)';ctx.fillText(`SCORE  ${score.toLocaleString()}`,16,26);
-    ctx.font='19px Arial';ctx.fillStyle='#FF5555';ctx.fillText('♥'.repeat(playerHealth)+'♡'.repeat(3-playerHealth),16,52);
+    ctx.font='19px Arial';ctx.fillStyle='#FF5555';ctx.fillText('♥'.repeat(playerHealth)+'♡'.repeat(Math.max(0,MAX_HEALTH-playerHealth)),16,52);
     ctx.font='bold 13px "Courier New"';ctx.fillStyle='#FFD700';ctx.fillText(`$ ${player.money}`,16,72);
+    ctx.font='bold 11px "Courier New"';ctx.fillStyle='rgba(255,140,160,0.55)';ctx.fillText(`[H] +♥  $${HEART_COST}`,16,88);
 
 
 
