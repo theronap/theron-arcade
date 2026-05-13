@@ -110,7 +110,7 @@ export function getQualityTier(educationRatio) {
 
 // Ticks per production cycle, floored at 1
 export function getProductionTicks(speedMultiplier) {
-  return Math.max(1, Math.floor(10 / speedMultiplier));
+  return Math.max(1, Math.floor(1 / speedMultiplier));
 }
 
 // Sum of litBonus values for all purchased sub-upgrades, minimum 1
