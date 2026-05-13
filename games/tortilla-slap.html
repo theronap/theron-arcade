@@ -5,21 +5,22 @@
   <title>Tortilla Slap</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
-    body{background:#000;overflow:hidden;display:flex;height:100vh;width:100vw;}
-    #shell{display:flex;width:100vw;height:100vh;}
-    canvas{display:block;flex:1;min-width:0;}
+    body{background:#000;overflow:hidden;}
+    canvas{display:block;}
     .side-hud{
-      width:110px;flex-shrink:0;
-      background:#07090f;
-      padding:12px 9px;
+      position:fixed;top:0;height:100vh;width:130px;
+      background:rgba(7,9,15,0.80);
+      padding:12px 10px;
       font-family:'Courier New',monospace;
       font-size:11px;
       color:rgba(232,234,246,0.75);
       display:flex;flex-direction:column;gap:3px;
       overflow:hidden;
+      z-index:20;
+      pointer-events:none;
     }
-    #left-hud{border-right:1px solid rgba(255,255,255,0.06);}
-    #right-hud{border-left:1px solid rgba(255,255,255,0.06);}
+    #left-hud{left:0;border-right:1px solid rgba(255,255,255,0.06);}
+    #right-hud{right:0;border-left:1px solid rgba(255,255,255,0.06);}
     .hud-section-label{
       font-size:8px;letter-spacing:0.22em;text-transform:uppercase;
       color:rgba(255,255,255,0.25);margin-bottom:2px;margin-top:12px;
@@ -37,35 +38,29 @@
   </style>
 </head>
 <body>
-<div id="shell">
-  <div id="left-hud" class="side-hud">
-    <div class="hud-section-label">Upgrades</div>
-    <div id="hud-bat"   class="hud-item">BAT $15</div>
-    <div id="hud-throw" class="hud-item">THROW $5 [R]</div>
-    <div id="hud-goon"  class="hud-item">GOON $20</div>
-    <div id="hud-fort"  class="hud-item">FORT $50 [E]</div>
-    <div id="hud-combo"></div>
-    <div id="hud-fort-ctrl"></div>
-    <div id="hud-coins"></div>
-  </div>
-  <canvas id="c"></canvas>
-  <div id="right-hud" class="side-hud">
-    <div class="hud-section-label">Wanted</div>
-    <div id="hud-stars">☆☆☆☆☆</div>
-    <div id="hud-bounty"></div>
-    <div id="hud-armed"></div>
-    <div id="hud-dodge"></div>
-  </div>
+<canvas id="c"></canvas>
+<div id="left-hud" class="side-hud">
+  <div class="hud-section-label">Upgrades</div>
+  <div id="hud-bat"   class="hud-item">BAT $15</div>
+  <div id="hud-throw" class="hud-item">THROW $5 [R]</div>
+  <div id="hud-goon"  class="hud-item">GOON $20</div>
+  <div id="hud-fort"  class="hud-item">FORT $50 [E]</div>
+  <div id="hud-combo"></div>
+  <div id="hud-fort-ctrl"></div>
+  <div id="hud-coins"></div>
+</div>
+<div id="right-hud" class="side-hud">
+  <div class="hud-section-label">Wanted</div>
+  <div id="hud-stars">☆☆☆☆☆</div>
+  <div id="hud-bounty"></div>
+  <div id="hud-armed"></div>
+  <div id="hud-dodge"></div>
 </div>
 <script>
 (() => {
   const cv = document.getElementById('c');
   const ctx = cv.getContext('2d');
-  function resize(){
-    const lw=document.getElementById('left-hud').offsetWidth;
-    const rw=document.getElementById('right-hud').offsetWidth;
-    cv.width=window.innerWidth-lw-rw; cv.height=window.innerHeight;
-  }
+  function resize(){ cv.width=window.innerWidth; cv.height=window.innerHeight; }
   window.addEventListener('resize',resize); resize();
 
   const TW=64, TH=32;
