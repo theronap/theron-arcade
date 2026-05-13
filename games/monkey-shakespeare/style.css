@@ -32,6 +32,32 @@ body {
   flex-direction: column;
 }
 
+/* ── Quality tier upgrade banner ── */
+.quality-banner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(20, 16, 8, 0.95);
+  border: 2px solid var(--amber);
+  border-radius: 8px;
+  padding: 14px 28px;
+  font-size: 15px;
+  color: var(--text);
+  letter-spacing: 1px;
+  z-index: 500;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.quality-banner strong { color: var(--amber); font-size: 17px; }
+.quality-banner-fade { animation: qualityFade 4s ease forwards; }
+@keyframes qualityFade {
+  0%   { opacity: 0; transform: translate(-50%, -55%); }
+  15%  { opacity: 1; transform: translate(-50%, -50%); }
+  70%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%); }
+}
+
 /* ── Banners ── */
 .banner {
   padding: 8px 20px;

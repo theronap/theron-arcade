@@ -4,7 +4,6 @@ import {
   MANUAL_CLICKS_PER_PIECE, MANUAL_PIECE_PRICE,
   getProductionTicks, getQualityTier, getLitMultiplier, getShakespeareChance,
 } from './economy.js';
-
 // Called by scene when player sells to an NPC. Sells all pending pieces at once.
 export function sellOnePiece() {
   if (!state || state.pendingPieces <= 0 || state.gameWon) return 0;
@@ -23,7 +22,7 @@ export function sellOnePiece() {
 }
 
 import { INITIAL_STATE, saveGame, loadGame, deleteSave } from './state.js';
-import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner } from './ui.js';
+import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner, showQualityBanner } from './ui.js';
 import { initScene } from './scene.js';
 
 // --- State ---
@@ -114,6 +113,17 @@ function tick() {
   if (state.saveTick >= SAVE_INTERVAL_TICKS) {
     state.saveTick = 0;
     saveGame(state);
+  }
+
+  // 5. Quality tier change detection
+  if (state.monkeys > 0) {
+    const edRatio = Math.min(state.educationCapacity, state.monkeys) / state.monkeys;
+    const currentTier = getQualityTier(edRatio);
+    if (state._lastQualityTier === undefined) state._lastQualityTier = currentTier;
+    if (currentTier > state._lastQualityTier) {
+      showQualityBanner(QUALITY_TIERS[state._lastQualityTier].name, QUALITY_TIERS[currentTier].name);
+      state._lastQualityTier = currentTier;
+    }
   }
 
   updateStats(state);

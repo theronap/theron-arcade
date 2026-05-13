@@ -127,6 +127,18 @@ export function showWinScreen(state) {
   overlay.hidden = false;
 }
 
+export function showQualityBanner(oldTierName, newTierName) {
+  const el = document.getElementById('quality-banner');
+  if (!el) return;
+  document.getElementById('quality-banner-old').textContent = oldTierName;
+  document.getElementById('quality-banner-new').textContent = newTierName;
+  el.hidden = false;
+  el.classList.remove('quality-banner-fade');
+  void el.offsetWidth; // reflow to restart animation
+  el.classList.add('quality-banner-fade');
+  setTimeout(() => { el.hidden = true; }, 4000);
+}
+
 export function showOfflineBanner(secondsAway, earned) {
   const banner = document.getElementById('offline-banner');
   if (!banner) return;
