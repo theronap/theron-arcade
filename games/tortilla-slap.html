@@ -948,8 +948,12 @@
   }
 
   // ── GAME LOOP ─────────────────────────────────────────────────────
-  let lastTime=0;
+  const FRAME_MS=1000/60;
+  let lastTime=0,lastFrame=0;
   function loop(now){
+    requestAnimationFrame(loop);
+    if(now-lastFrame<FRAME_MS)return;
+    lastFrame=now;
     const dt=Math.min((now-lastTime)/1000,0.05);lastTime=now;gameTime+=dt;
     playerHitFlash=Math.max(0,playerHitFlash-dt*2);
     comboTimer=Math.max(0,comboTimer-dt); if(comboTimer<=0&&combo>0) combo=0;
@@ -984,7 +988,7 @@
         queueHeadline('POLICE RESPOND TO DISTURBANCE: SUSPECT ARMED WITH CORN PRODUCT');
       }
     }
-    render();requestAnimationFrame(loop);
+    render();
   }
   queueHeadline('TORTILLA MARKET REPORTS UNUSUAL ACTIVITY TODAY — VENDORS ON HIGH ALERT');
   requestAnimationFrame(loop);
