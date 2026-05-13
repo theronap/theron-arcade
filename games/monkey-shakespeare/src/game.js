@@ -156,7 +156,7 @@ export function manualType() {
 
 export function manualBuyBananas() {
   const cost = 0.50;
-  const amount = 50;
+  const amount = 500;
   if (state.money < cost) return;
   state.money -= cost;
   state.bananas += amount;

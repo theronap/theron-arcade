@@ -11,7 +11,7 @@ export const MANUAL_CLICKS_PER_PIECE = 10;
 export const MANUAL_PIECE_PRICE = 1.00; // "Simple Paragraph" quality
 
 export const QUALITY_TIERS = [
-  { name: 'Gibberish',          threshold: 0,    basePrice: 0.10,      sample: 'asdfkj qqpwle xmzv rtyuiop...' },
+  { name: 'Gibberish',          threshold: 0,    basePrice: 1.00,      sample: 'asdfkj qqpwle xmzv rtyuiop...' },
   { name: 'Word Salad',         threshold: 0.10, basePrice: 0.50,      sample: 'The monkey run fast sky purple...' },
   { name: 'Basic Sentences',    threshold: 0.20, basePrice: 2.50,      sample: 'The monkey ran across the green field.' },
   { name: 'Simple Paragraph',   threshold: 0.30, basePrice: 10.00,     sample: 'The monkey sat at the old typewriter, thinking...' },
