@@ -5,7 +5,7 @@ import {
   getProductionTicks, getQualityTier, getLitMultiplier, getShakespeareChance,
 } from './economy.js';
 
-// Called by scene when player sells to an NPC. Returns price earned or 0.
+// Called by scene when player sells to an NPC. Sells all pending pieces at once.
 export function sellOnePiece() {
   if (!state || state.pendingPieces <= 0 || state.gameWon) return 0;
   const edRatio = state.monkeys > 0
@@ -14,11 +14,12 @@ export function sellOnePiece() {
   const qi = getQualityTier(edRatio);
   const quality = QUALITY_TIERS[qi];
   const price = quality.basePrice * DISTRIBUTION_TIERS[state.distributionTier].multiplier;
-  state.pendingPieces--;
-  state.money += price;
-  addFeedEntry(quality.name, price, 1, false);
+  const count = state.pendingPieces;
+  state.pendingPieces = 0;
+  state.money += price * count;
+  addFeedEntry(quality.name, price, count, false);
   updateStats(state);
-  return price;
+  return price * count;
 }
 
 import { INITIAL_STATE, saveGame, loadGame, deleteSave } from './state.js';
