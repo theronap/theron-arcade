@@ -234,6 +234,6 @@ export function init() {
     if (treeEl) treeEl.hidden = false;
   });
 
-  setInterval(tick, 1000);
+  setInterval(tick, 10);
   initScene(() => state, sellOnePiece);
 }
