@@ -4,7 +4,7 @@ import {
   MANUAL_CLICKS_PER_PIECE, MANUAL_PIECE_PRICE,
   getProductionTicks, getQualityTier, getLitMultiplier, getShakespeareChance,
   SHAKESPEARE_WORDS_THRESHOLD, formatExpectedTime, chanceInWindow,
-} from './economy.js?v=4';
+} from './economy.js?v=5';
 
 const WORD_MILESTONES = [
   { words: SHAKESPEARE_WORDS_THRESHOLD * 0.10, label: '10% of the way to Shakespeare — keep going!' },
@@ -66,9 +66,9 @@ export function sellOnePiece() {
   return price * count;
 }
 
-import { INITIAL_STATE, saveGame, loadGame, deleteSave } from './state.js?v=4';
-import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner, showQualityBanner, showMilestoneBanner, showProfessorDialogue } from './ui.js?v=4';
-import { initScene } from './scene.js?v=4';
+import { INITIAL_STATE, saveGame, loadGame, deleteSave } from './state.js?v=5';
+import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner, showQualityBanner, showMilestoneBanner, showProfessorDialogue } from './ui.js?v=5';
+import { initScene } from './scene.js?v=5';
 
 // --- State ---
 

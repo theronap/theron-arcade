@@ -17,6 +17,20 @@ const MBODY  = ['#8b5a2b','#5a3a18','#3a2810'];
 const PHEAD  = '#f0c878';
 const MHEAD  = '#c8824a';
 
+// New structure palettes
+const CART   = ['#d4a820','#a07010','#705008']; // banana stall counter
+const AWNING = ['#c83030','#902020','#601010']; // cart awning
+const BWALL  = ['#c0a070','#907040','#685028']; // office building walls
+const BGLASS = ['#88b0d8','#6080a8','#406080']; // empty windows
+const WLIT   = ['#f0c060','#b08020','#806010']; // occupied/lit windows
+const BROOF  = ['#703020','#501810','#381008']; // rooftop
+const CWALL  = ['#a0b8d8','#7088b0','#506088']; // classroom walls
+const CBOARD = ['#2a5030','#1a3820','#102810']; // chalkboard
+const VBODY  = ['#b04828','#803218','#601808']; // vendor body
+const VHEAD  = '#d89058';                        // vendor head
+const PROFB  = ['#5a6878','#3a4858','#283040']; // professor suit
+const PROFH  = '#e8c8a0';                        // professor head
+
 const NPC_PALETTES = [
   [['#c03030','#8a1a1a','#6a1010'], '#e87070'],
   [['#30a030','#1a6a1a','#0e4a0e'], '#70e870'],
@@ -167,6 +181,59 @@ function drawPaperStack(x, y, count) {
   }
 }
 
+function drawBananaCart(x, y) {
+  // Counter
+  ibox(x, y, 0, 1.3, 0.8, 0.55, CART);
+  // Awning posts
+  ibox(x - 0.06, y - 0.06, 0,   0.10, 0.10, 1.10, TRUNK);
+  ibox(x + 1.12, y - 0.06, 0,   0.10, 0.10, 1.10, TRUNK);
+  // Awning panel
+  ibox(x - 0.25, y - 0.25, 1.10, 1.80, 1.0, 0.14, AWNING);
+  // Banana piles on counter
+  ibox(x + 0.10, y + 0.10, 0.55, 0.30, 0.20, 0.20, CART);
+  ibox(x + 0.50, y + 0.10, 0.55, 0.30, 0.20, 0.20, CART);
+  ibox(x + 0.88, y + 0.12, 0.55, 0.22, 0.16, 0.18, CART);
+  // Vendor NPC behind counter
+  drawCharacter(x + 0.15, y + 0.50, VBODY, VHEAD, false, 0.85);
+}
+
+function drawClassroom(x, y) {
+  const w = 2.2, d = 1.8;
+  // Floor 1 walls
+  ibox(x, y, 0,   w, d, 1.0, CWALL);
+  // Floor 2 walls
+  ibox(x, y, 1.0, w, d, 1.0, CWALL);
+  // Roof
+  ibox(x - 0.12, y - 0.12, 2.0, w + 0.24, d + 0.24, 0.32, BROOF);
+  // Ground floor windows
+  ibox(x + 0.28, y - 0.05, 0.25, 0.45, 0.07, 0.50, BGLASS);
+  ibox(x + 1.32, y - 0.05, 0.25, 0.45, 0.07, 0.50, BGLASS);
+  // Second floor windows
+  ibox(x + 0.28, y - 0.05, 1.28, 0.45, 0.07, 0.50, BGLASS);
+  ibox(x + 1.32, y - 0.05, 1.28, 0.45, 0.07, 0.50, BGLASS);
+  // Door
+  ibox(x + 0.82, y - 0.05, 0,   0.48, 0.07, 0.65, TRUNK);
+  // Chalkboard visible on left face
+  ibox(x + 0.35, y + d - 0.07, 0.30, 1.20, 0.08, 0.58, CBOARD);
+  // Professor outside the door
+  drawCharacter(x + 1.20, y + d + 0.10, PROFB, PROFH, false, 0.80);
+}
+
+function drawMonkeyBuilding(x, y, floors, occupiedSlots) {
+  const w = 2.0, d = 1.5, fh = 0.9;
+  const wc = (slot) => occupiedSlots > slot ? WLIT : BGLASS;
+
+  for (let f = 0; f < floors; f++) {
+    const bz = f * fh;
+    ibox(x, y, bz, w, d, fh, BWALL);
+    // One window per floor on each visible face
+    ibox(x + w - 0.06, y + 0.25, bz + 0.20, 0.07, 0.55, 0.44, wc(f * 2));
+    ibox(x + 0.25, y + d - 0.06, bz + 0.20, 0.55, 0.07, 0.44, wc(f * 2 + 1));
+  }
+  // Roof
+  ibox(x - 0.10, y - 0.10, floors * fh, w + 0.20, d + 0.20, 0.20, BROOF);
+}
+
 // ── NPC helpers ───────────────────────────────────────────
 
 function spawnNpc() {
@@ -308,13 +375,22 @@ function updateFloats(dt) {
 
 // ── Render ────────────────────────────────────────────────
 
+// Individual desks — hidden once a building absorbs that tier (maxMc)
 const EXTRA_DESKS = [
-  { x: 5.5, y: 1.0, min: 2  },
-  { x: 5.5, y: 3.0, min: 6  },
-  { x: 1.5, y: 4.5, min: 3  },
-  { x: 5.5, y: 5.5, min: 11 },
-  { x: 1.5, y: 6.5, min: 16 },
-  { x: 3.5, y: 6.5, min: 26 },
+  { x: 5.5, y: 1.0, min: 2,  maxMc: 9        },
+  { x: 5.5, y: 3.0, min: 6,  maxMc: 9        },
+  { x: 1.5, y: 4.5, min: 3,  maxMc: 24       },
+  { x: 5.5, y: 5.5, min: 11, maxMc: 49       },
+  { x: 1.5, y: 6.5, min: 16, maxMc: 99       },
+  { x: 3.5, y: 6.5, min: 26, maxMc: Infinity },
+];
+
+// Office buildings phase in at monkey milestones, replacing desks
+const BUILDINGS = [
+  { min: 10,  x: 6.5, y: 0.5, floors: 2 }, // sum ~7, upper-right
+  { min: 25,  x: 0.5, y: 6.5, floors: 3 }, // sum ~7, lower-left
+  { min: 50,  x: 6.5, y: 4.5, floors: 4 }, // sum ~11, right-center
+  { min: 100, x: 2.5, y: 8.0, floors: 5 }, // sum ~10, bottom
 ];
 
 function drawScene() {
@@ -322,6 +398,8 @@ function drawScene() {
   const mc = st?.monkeys || 0;
   const stalled = st?.monkeysStalled || false;
   const pending = st?.pendingPieces || 0;
+  const bananaTier = st?.bananaTier ?? 0;
+  const eduCap = st?.educationCapacity ?? 0;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -339,14 +417,25 @@ function drawScene() {
       if (ty >= 0 && ty < GRID) groundTile(tx, ty);
     }
 
+    // Banana cart (extends left of grid, sum ≈ 2)
+    if (sum === 2 && bananaTier > 0) drawBananaCart(-1.5, 3.5);
+
     // Back trees
     if (sum === 5) drawTree(0, 5);
     if (sum === 6) { drawTree(0, 6); drawTree(6, 0); }
     if (sum === 7) { drawTree(7, 0); drawTree(0, 7); }
 
-    // Extra desks + monkeys
-    EXTRA_DESKS.forEach(({ x, y, min }) => {
+    // Office buildings (replace desks at milestones)
+    BUILDINGS.forEach(({ min, x, y, floors }) => {
       if (mc < min) return;
+      if (Math.round(x + y) !== sum) return;
+      const occupied = Math.min(mc - min, floors * 2);
+      drawMonkeyBuilding(x, y, floors, occupied);
+    });
+
+    // Individual desks — hidden once their tier is absorbed by a building
+    EXTRA_DESKS.forEach(({ x, y, min, maxMc }) => {
+      if (mc < min || mc > maxMc) return;
       const s = Math.round(x + y);
       if (s !== sum) return;
       drawDesk(x, y);
@@ -365,6 +454,9 @@ function drawScene() {
     if (sum === 7) {
       if (mc > 0) drawCharacter(3.1, 3.2, MBODY, MHEAD, !stalled);
     }
+
+    // Classroom (extends right of grid, sum ≈ 11)
+    if (sum === 11 && eduCap > 0) drawClassroom(9.2, 1.5);
   }
 
   // Walking NPCs (drawn after ground)
