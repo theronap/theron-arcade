@@ -163,8 +163,8 @@ export function formatNumber(n) {
   return `${(n / 1_000_000_000).toFixed(2)}B`;
 }
 
-// Tick rate used for time calculations (250ms/tick = 4 ticks/sec)
-export const TICKS_PER_SECOND = 4;
+// Tick rate used for time calculations (1000ms/tick = 1 tick/sec)
+export const TICKS_PER_SECOND = 1;
 
 // Expected time until Shakespeare given per-tick probability
 export function formatExpectedTime(chancePerTick) {

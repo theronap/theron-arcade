@@ -86,6 +86,13 @@
   📝 <span id="milestone-text"></span>
 </div>
 
+<!-- Professor Pemberton dialogue -->
+<div id="professor-dialogue" class="professor-box" hidden>
+  <button class="prof-dismiss" onclick="this.parentElement.hidden=true">✕</button>
+  <div class="prof-header">📜 Prof. Pemberton</div>
+  <p id="prof-text"></p>
+</div>
+
 <!-- Main 3-column layout -->
 <main>
 
@@ -181,7 +188,7 @@
 </div>
 
 <script type="module">
-  import { init } from '/games/monkey-shakespeare/src/game.js?v=3';
+  import { init } from '/games/monkey-shakespeare/src/game.js?v=4';
   init();
 </script>
 </body>

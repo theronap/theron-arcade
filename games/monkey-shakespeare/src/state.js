@@ -2,7 +2,7 @@ import {
   QUALITY_TIERS, DISTRIBUTION_TIERS, BANANA_TIERS,
   WORDS_PER_PIECE, BANANA_CONSUMPTION_INTERVAL, OFFLINE_CAP_SECONDS,
   MANUAL_PIECE_PRICE, getProductionTicks, getQualityTier,
-} from './economy.js';
+} from './economy.js?v=4';
 
 const SAVE_KEY = 'monkey_shakespeare_v1';
 
@@ -22,6 +22,7 @@ export const INITIAL_STATE = {
   saveTick: 0,
   monkeysStalled: false,
   purchased: [],
+  shownDialogues: [],
   manualProgress: 0,
   pendingPieces: 0,
   lastSave: Date.now(),

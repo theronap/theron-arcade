@@ -4,7 +4,7 @@ import {
   MANUAL_CLICKS_PER_PIECE, MANUAL_PIECE_PRICE,
   getProductionTicks, getQualityTier, getLitMultiplier, getShakespeareChance,
   SHAKESPEARE_WORDS_THRESHOLD, formatExpectedTime, chanceInWindow,
-} from './economy.js';
+} from './economy.js?v=4';
 
 const WORD_MILESTONES = [
   { words: SHAKESPEARE_WORDS_THRESHOLD * 0.10, label: '10% of the way to Shakespeare — keep going!' },
@@ -13,6 +13,42 @@ const WORD_MILESTONES = [
   { words: SHAKESPEARE_WORDS_THRESHOLD * 0.75, label: '75% — the Bard is within reach.' },
   { words: SHAKESPEARE_WORDS_THRESHOLD,        label: '1,000,000 words! Peak Shakespeare probability unlocked.' },
 ];
+// Professor Pemberton fires one dialogue per id, checked each tick and on upgrade purchase.
+const PROFESSOR_DIALOGUES = [
+  {
+    id: 'reality_check',
+    check: (st) => st.totalWords >= SHAKESPEARE_WORDS_THRESHOLD * 0.10 && st.monkeys > 0,
+    text: (st) => `"Do you have any idea what you're attempting? Producing all of Hamlet by random keystrokes — 130,000 characters — requires roughly 1 in 10^186,000 attempts. Your ${st.monkeys} monkey${st.monkeys !== 1 ? 's' : ''} would need approximately 10^185,990 years. The observable universe is only 10^10 years old. This... is not going to work."`,
+  },
+  {
+    id: 'edu_pivot',
+    check: (st) => st.educationCapacity > 0,
+    text: () => `"Wait. I've been thinking about this wrong. What if instead of random characters the monkeys only typed real English words? Hamlet uses roughly 5,000 distinct words. Each keystroke is a word, not a letter. The search space drops from 27^130,000 to 5,000^30,000. That's still 10^113,000 years — but it's 73,000 orders of magnitude better. We might actually have a strategy here."`,
+  },
+  {
+    id: 'words_halfway',
+    check: (st) => st.totalWords >= SHAKESPEARE_WORDS_THRESHOLD * 0.50 && st.educationCapacity > 0,
+    text: () => `"The monkeys are reading. Writing. Improving. The Shakespeare probability is climbing toward something real — not guaranteed, but finite. For the first time in this enterprise, I am not completely certain this is a fool's errand."`,
+  },
+  {
+    id: 'words_peak',
+    check: (st) => st.totalWords >= SHAKESPEARE_WORDS_THRESHOLD,
+    text: () => `"One million words. The system is primed. Maximum Shakespeare probability is now in effect. Every second, every keystroke — it could happen. The Bard is within statistical reach."`,
+  },
+];
+
+function checkProfessorDialogues() {
+  if (!state || state.gameWon) return;
+  if (!state.shownDialogues) state.shownDialogues = [];
+  for (const dlg of PROFESSOR_DIALOGUES) {
+    if (!state.shownDialogues.includes(dlg.id) && dlg.check(state)) {
+      state.shownDialogues.push(dlg.id);
+      showProfessorDialogue(dlg.text(state));
+      return; // one at a time
+    }
+  }
+}
+
 // Called by scene when player sells to an NPC. Sells all pending pieces at once.
 export function sellOnePiece() {
   if (!state || state.pendingPieces <= 0 || state.gameWon) return 0;
@@ -30,9 +66,9 @@ export function sellOnePiece() {
   return price * count;
 }
 
-import { INITIAL_STATE, saveGame, loadGame, deleteSave } from './state.js?v=3';
-import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner, showQualityBanner, showMilestoneBanner } from './ui.js?v=3';
-import { initScene } from './scene.js?v=3';
+import { INITIAL_STATE, saveGame, loadGame, deleteSave } from './state.js?v=4';
+import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner, showQualityBanner, showMilestoneBanner, showProfessorDialogue } from './ui.js?v=4';
+import { initScene } from './scene.js?v=4';
 
 // --- State ---
 
@@ -145,6 +181,9 @@ function tick() {
     showMilestoneBanner(nextMilestone.label);
   }
 
+  // 7. Professor dialogue triggers
+  checkProfessorDialogues();
+
   updateStats(state);
   renderUpgrades(state);
 }
@@ -214,6 +253,7 @@ export function purchaseUpgrade(id) {
   if (eff.distributionTier != null) state.distributionTier = eff.distributionTier;
   // litBonus upgrades are computed dynamically via getLitMultiplier()
 
+  checkProfessorDialogues();
   updateStats(state);
   renderUpgrades(state);
 }

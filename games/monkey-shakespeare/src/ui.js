@@ -3,7 +3,7 @@ import {
   formatMoney, formatNumber, getShakespeareChance, getLitMultiplier,
   MANUAL_CLICKS_PER_PIECE, SHAKESPEARE_WORDS_THRESHOLD,
   formatExpectedTime, chanceInWindow,
-} from './economy.js';
+} from './economy.js?v=4';
 
 const MAX_FEED_ENTRIES = 12;
 
@@ -161,6 +161,17 @@ export function showQualityBanner(oldTierName, newTierName) {
   void el.offsetWidth; // reflow to restart animation
   el.classList.add('quality-banner-fade');
   setTimeout(() => { el.hidden = true; }, 4000);
+}
+
+export function showProfessorDialogue(text, durationMs = 10000) {
+  const box = document.getElementById('professor-dialogue');
+  if (!box) return;
+  document.getElementById('prof-text').textContent = text;
+  box.hidden = false;
+  box.classList.remove('prof-fade');
+  void box.offsetWidth;
+  box.classList.add('prof-fade');
+  setTimeout(() => { box.hidden = true; }, durationMs);
 }
 
 export function showOfflineBanner(secondsAway, earned) {

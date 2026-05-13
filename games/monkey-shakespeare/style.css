@@ -60,6 +60,51 @@ body {
   100% { opacity: 0; transform: translate(-50%, -50%); }
 }
 
+/* ── Professor Pemberton dialogue ── */
+.professor-box {
+  position: fixed;
+  bottom: 140px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 540px;
+  width: 90%;
+  background: #1e1a10;
+  border: 2px solid var(--amber);
+  border-radius: 8px;
+  padding: 14px 38px 14px 18px;
+  z-index: 600;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--text);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+}
+.prof-header {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--amber);
+  margin-bottom: 8px;
+}
+.professor-box p { font-style: italic; margin: 0; }
+.prof-dismiss {
+  position: absolute;
+  top: 8px; right: 10px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+.prof-dismiss:hover { color: var(--text); }
+.prof-fade { animation: profFade 10s ease forwards; }
+@keyframes profFade {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  8%   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  72%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(0); }
+}
+
 /* ── Banners ── */
 .banner {
   padding: 8px 20px;
