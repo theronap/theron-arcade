@@ -771,7 +771,6 @@
 
   function updateCoins(dt){
     for(let i=coins.length-1;i>=0;i--){
-      coins[i].t-=dt; if(coins[i].t<=0){coins.splice(i,1);continue;}
       const dx=player.x+0.44-(coins[i].x+0.09),dy=player.y+0.35-(coins[i].y+0.08),dist=Math.sqrt(dx*dx+dy*dy);
       if(dist<1.2){ player.money++;
         slapFX.push({x:coins[i].x,y:coins[i].y,z:1.2,t:0.65,text:'+$1',col:'#FFD700'});
