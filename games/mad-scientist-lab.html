@@ -5,27 +5,12 @@
   <title>Mad Scientist Lab</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { background:#0a0a16; display:flex; height:100vh; overflow:hidden; }
-    #ad-left, #ad-right {
-      width:160px; min-width:160px; background:#0a0a16;
-      border-right:1px solid #1a1a2e; display:flex; flex-direction:column;
-      align-items:center; justify-content:center; gap:12px; padding:8px;
-    }
-    #ad-right { border-right:none; border-left:1px solid #1a1a2e; }
-    .ad-slot {
-      width:144px; background:#0f0f20; border:1px solid #22224a;
-      color:#33335a; font:11px/1.5 'Courier New'; text-align:center;
-      padding:10px 6px; border-radius:3px;
-    }
-    .ad-slot.tall { height:580px; display:flex; align-items:center; justify-content:center; }
-    canvas { flex:1; display:block; min-width:300px; }
-    @media (max-width:700px) { #ad-left,#ad-right { display:none; } }
+    body { background:#0a0a16; overflow:hidden; }
+    canvas { display:block; width:100vw; height:100vh; }
   </style>
 </head>
 <body>
-<div id="ad-left"><div class="ad-slot tall">AD SPACE<br>160 × 600</div></div>
 <canvas id="c"></canvas>
-<div id="ad-right"><div class="ad-slot tall">AD SPACE<br>160 × 600</div></div>
 
 <script>
 (() => {

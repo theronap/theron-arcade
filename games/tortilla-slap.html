@@ -795,26 +795,6 @@
     ctx.restore();
   }
 
-  // ── BROADCAST STATE TO PARENT (arcade site) ──────────────────────
-  let _lastBroadcast=0;
-  function broadcastState(){
-    const now=Date.now(); if(now-_lastBroadcast<150) return; _lastBroadcast=now;
-    const ownedForts=fortresses.filter(f=>f.purchased&&!f.broken).length;
-    const hasTunnel=!!(playerFortress&&fortresses.some(f=>f!==playerFortress&&f.purchased&&!f.burning&&!f.broken));
-    try{ window.parent.postMessage({
-      type:'tortilla-slap-state',
-      score, money:player.money, health:playerHealth,
-      upgrades:{bat:upgrades.bat},
-      throwAmmo:player.throwAmmo,
-      goons:goons.length, maxGoons:MAX_GOONS,
-      ownedForts, wantedLevel,
-      combo, comboMult:combo>=2?Math.min(4,1+~~((combo-1)/2)):0,
-      inFortress:!!playerFortress, hasTunnel,
-      coins:coins.length,
-      bounty:Math.floor(score/10)*10,
-      dodgeCooldown, gameTime, gameOver,
-    },'*'); }catch(e){}
-  }
 
   // ── RENDER ───────────────────────────────────────────────────────
   function render(){
@@ -921,7 +901,6 @@
     ctx.font='19px Arial';ctx.fillStyle='#FF5555';ctx.fillText('♥'.repeat(playerHealth)+'♡'.repeat(3-playerHealth),16,52);
     ctx.font='bold 13px "Courier New"';ctx.fillStyle='#FFD700';ctx.fillText(`$ ${player.money}`,16,72);
 
-    broadcastState();
 
 
     // Ticker

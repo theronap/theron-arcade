@@ -235,38 +235,34 @@
     }
 
     .game-side-panel {
-      width: 220px;
+      width: 200px;
       flex-shrink: 0;
-      padding: 20px 18px;
-      font-family: 'Courier New', monospace;
-      font-size: 11px;
-      color: rgba(232,234,246,0.55);
+      padding: 20px 16px;
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      align-items: center;
+      gap: 16px;
       overflow: hidden;
     }
     #gsp-left  { border-right: 1px solid rgba(255,255,255,0.05); }
     #gsp-right { border-left:  1px solid rgba(255,255,255,0.05); }
 
-    .gsp-label {
-      font-size: 8px;
-      letter-spacing: 0.24em;
+    .ad-slot {
+      width: 160px;
+      height: 600px;
+      max-height: 80vh;
+      background: rgba(255,255,255,0.02);
+      border: 1px dashed rgba(255,255,255,0.08);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Courier New', monospace;
+      font-size: 9px;
+      letter-spacing: 0.15em;
+      color: rgba(255,255,255,0.1);
       text-transform: uppercase;
-      color: rgba(255,255,255,0.22);
-      margin-bottom: 4px;
-      margin-top: 14px;
     }
-    .gsp-label:first-child { margin-top: 0; }
-    .gsp-item { padding: 3px 0; color: rgba(232,234,246,0.32); transition: color 0.2s; }
-    .gsp-item.on { color: rgba(232,234,246,0.90); }
-    #gsp-combo { font-weight: bold; font-size: 13px; margin-top: 6px; min-height: 18px; }
-    #gsp-fort-ctrl { color: rgba(100,160,255,0.85); font-size: 10px; line-height: 1.75; margin-top: 4px; }
-    #gsp-coins { color: #FFD700; margin-top: 4px; min-height: 14px; }
-    #gsp-stars { font-size: 20px; letter-spacing: 4px; margin: 6px 0 2px; }
-    #gsp-bounty { color: #FF9999; font-size: 10px; line-height: 1.6; margin-top: 4px; }
-    #gsp-armed { font-size: 9px; color: #FF4444; font-weight: bold; letter-spacing: 0.1em; margin-top: 2px; }
-    #gsp-dodge { color: rgba(136,255,255,0.75); font-size: 10px; margin-top: 8px; }
 
     #game-frame-wrap {
       flex: 1;
@@ -382,16 +378,9 @@
   </div>
   <div id="overlay-body">
 
-    <!-- Left info panel -->
+    <!-- Left ad panel -->
     <div id="gsp-left" class="game-side-panel">
-      <div class="gsp-label">Upgrades</div>
-      <div id="gsp-bat"   class="gsp-item">BAT $15</div>
-      <div id="gsp-throw" class="gsp-item">THROW $5 [R]</div>
-      <div id="gsp-goon"  class="gsp-item">GOON $20</div>
-      <div id="gsp-fort"  class="gsp-item">FORT $50 [E]</div>
-      <div id="gsp-combo"></div>
-      <div id="gsp-fort-ctrl"></div>
-      <div id="gsp-coins"></div>
+      <div class="ad-slot">160 × 600</div>
     </div>
 
     <!-- Game iframe -->
@@ -399,13 +388,9 @@
       <iframe id="game-frame" src="" allowfullscreen></iframe>
     </div>
 
-    <!-- Right info panel -->
+    <!-- Right ad panel -->
     <div id="gsp-right" class="game-side-panel">
-      <div class="gsp-label">Wanted</div>
-      <div id="gsp-stars">☆☆☆☆☆</div>
-      <div id="gsp-bounty"></div>
-      <div id="gsp-armed"></div>
-      <div id="gsp-dodge"></div>
+      <div class="ad-slot">160 × 600</div>
     </div>
 
   </div>
@@ -477,66 +462,6 @@ function closeOverlay() {
 closeBtn.addEventListener('click', closeOverlay);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOverlay(); });
 
-// ── GAME STATE VIA postMessage ───────────────────────────────
-window.addEventListener('message', e => {
-  const d = e.data;
-  if (!d || d.type !== 'tortilla-slap-state') return;
-
-  const set = (id, text, cls) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = text;
-    el.className = cls || '';
-  };
-  const html = (id, markup) => { const el = document.getElementById(id); if (el) el.innerHTML = markup; };
-
-  // Upgrades
-  set('gsp-bat',   d.upgrades.bat ? 'BAT ✓' : `BAT $15`,
-      d.upgrades.bat ? 'gsp-item on' : 'gsp-item');
-  document.getElementById('gsp-bat').style.color = d.upgrades.bat ? '#FF44AA' : '';
-
-  set('gsp-throw', d.throwAmmo > 0 ? `THROW ×${d.throwAmmo}` : 'THROW $5 [R]',
-      d.throwAmmo > 0 ? 'gsp-item on' : 'gsp-item');
-  document.getElementById('gsp-throw').style.color = d.throwAmmo > 0 ? '#E8C840' : '';
-
-  set('gsp-goon',  d.goons > 0 ? `GOONS ${d.goons}/${d.maxGoons}` : 'GOON $20',
-      d.goons > 0 ? 'gsp-item on' : 'gsp-item');
-  document.getElementById('gsp-goon').style.color = d.goons > 0 ? '#FF9933' : '';
-
-  set('gsp-fort',  d.ownedForts > 0 ? `FORTS ${d.ownedForts}/4` : 'FORT $50 [E]',
-      d.ownedForts > 0 ? 'gsp-item on' : 'gsp-item');
-  document.getElementById('gsp-fort').style.color = d.ownedForts > 0 ? '#AAAAFF' : '';
-
-  const comboEl = document.getElementById('gsp-combo');
-  if (comboEl) {
-    comboEl.textContent = d.comboMult >= 2 ? `×${d.comboMult} COMBO` : '';
-    comboEl.style.color = `rgb(255,${Math.min(255,150+d.combo*20)},0)`;
-  }
-
-  const fcEl = document.getElementById('gsp-fort-ctrl');
-  if (fcEl) fcEl.innerHTML = d.inFortress
-    ? (d.hasTunnel ? '[T] tunnel<br>[E] exit<br>[U] upgrade' : '[E] exit<br>[U] upgrade')
-    : '';
-
-  const coinsEl = document.getElementById('gsp-coins');
-  if (coinsEl) {
-    coinsEl.textContent = d.coins > 0 ? `COINS: ${d.coins}` : '';
-    coinsEl.style.opacity = d.coins > 0 ? (0.5 + Math.abs(Math.sin(d.gameTime * 3)) * 0.5) : '1';
-  }
-
-  // Wanted
-  const starsEl = document.getElementById('gsp-stars');
-  if (starsEl) {
-    starsEl.textContent = '★'.repeat(d.wantedLevel) + '☆'.repeat(5 - d.wantedLevel);
-    starsEl.style.color = d.wantedLevel >= 4 ? '#FF4444' : d.wantedLevel >= 2 ? '#FFA500' : '#FFD700';
-  }
-
-  const bountyEl = document.getElementById('gsp-bounty');
-  if (bountyEl) bountyEl.innerHTML = d.wantedLevel >= 3 ? `REWARD<br>$${d.bounty.toLocaleString()}` : '';
-
-  set('gsp-armed', d.wantedLevel >= 5 ? 'ARMED & DANGEROUS' : '');
-  set('gsp-dodge', d.dodgeCooldown > 0 ? `ROLL ${Math.ceil(d.dodgeCooldown * 10) / 10}s` : '');
-});
 </script>
 </body>
 </html>
