@@ -3,59 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <title>Tortilla Slap</title>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box;}
-    body{background:#000;overflow:hidden;}
-    canvas{display:block;}
-    .side-hud{
-      position:fixed;top:0;height:100vh;width:130px;
-      background:rgba(7,9,15,0.80);
-      padding:12px 10px;
-      font-family:'Courier New',monospace;
-      font-size:11px;
-      color:rgba(232,234,246,0.75);
-      display:flex;flex-direction:column;gap:3px;
-      overflow:hidden;
-      z-index:20;
-      pointer-events:none;
-    }
-    #left-hud{left:0;border-right:1px solid rgba(255,255,255,0.06);}
-    #right-hud{right:0;border-left:1px solid rgba(255,255,255,0.06);}
-    .hud-section-label{
-      font-size:8px;letter-spacing:0.22em;text-transform:uppercase;
-      color:rgba(255,255,255,0.25);margin-bottom:2px;margin-top:12px;
-    }
-    .hud-section-label:first-child{margin-top:0;}
-    .hud-item{padding:3px 0;color:rgba(232,234,246,0.38);transition:color 0.2s;}
-    .hud-item.on{color:rgba(232,234,246,0.92);}
-    #hud-combo{font-weight:bold;font-size:13px;margin-top:4px;min-height:18px;}
-    #hud-fort-ctrl{color:rgba(100,160,255,0.85);font-size:10px;line-height:1.7;margin-top:2px;}
-    #hud-coins{color:#FFD700;margin-top:2px;min-height:14px;}
-    #hud-stars{font-size:19px;letter-spacing:3px;margin:4px 0;}
-    #hud-bounty{color:#FF8888;font-size:10px;line-height:1.6;margin-top:4px;min-height:14px;}
-    #hud-dodge{color:rgba(136,255,255,0.75);font-size:10px;margin-top:6px;min-height:14px;}
-    #hud-armed{font-size:9px;color:#FF4444;font-weight:bold;letter-spacing:0.08em;margin-top:2px;}
-  </style>
+  <style>* { margin:0; padding:0; } body { background:#000; overflow:hidden; } canvas { display:block; }</style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="left-hud" class="side-hud">
-  <div class="hud-section-label">Upgrades</div>
-  <div id="hud-bat"   class="hud-item">BAT $15</div>
-  <div id="hud-throw" class="hud-item">THROW $5 [R]</div>
-  <div id="hud-goon"  class="hud-item">GOON $20</div>
-  <div id="hud-fort"  class="hud-item">FORT $50 [E]</div>
-  <div id="hud-combo"></div>
-  <div id="hud-fort-ctrl"></div>
-  <div id="hud-coins"></div>
-</div>
-<div id="right-hud" class="side-hud">
-  <div class="hud-section-label">Wanted</div>
-  <div id="hud-stars">☆☆☆☆☆</div>
-  <div id="hud-bounty"></div>
-  <div id="hud-armed"></div>
-  <div id="hud-dodge"></div>
-</div>
 <script>
 (() => {
   const cv = document.getElementById('c');
@@ -844,58 +795,25 @@
     ctx.restore();
   }
 
-  // ── SIDE PANEL DOM UPDATES ────────────────────────────────────────
-  function updateSidePanels(){
-    // Left — upgrades
-    const batEl=document.getElementById('hud-bat');
-    if(upgrades.bat){batEl.textContent='BAT ✓';batEl.style.color='#FF44AA';batEl.className='hud-item on';}
-    else{batEl.textContent=`BAT $${BAT_COST}`;batEl.style.color='';batEl.className='hud-item';}
-
-    const throwEl=document.getElementById('hud-throw');
-    if(player.throwAmmo>0){throwEl.textContent=`THROW ×${player.throwAmmo}`;throwEl.style.color='#E8C840';throwEl.className='hud-item on';}
-    else{throwEl.textContent=`THROW $${THROW_AMMO_COST} [R]`;throwEl.style.color='';throwEl.className='hud-item';}
-
-    const goonEl=document.getElementById('hud-goon');
-    if(goons.length>0){goonEl.textContent=`GOONS ${goons.length}/${MAX_GOONS}`;goonEl.style.color='#FF9933';goonEl.className='hud-item on';}
-    else{goonEl.textContent=`GOON $${GOON_COST}`;goonEl.style.color='';goonEl.className='hud-item';}
-
+  // ── BROADCAST STATE TO PARENT (arcade site) ──────────────────────
+  let _lastBroadcast=0;
+  function broadcastState(){
+    const now=Date.now(); if(now-_lastBroadcast<150) return; _lastBroadcast=now;
     const ownedForts=fortresses.filter(f=>f.purchased&&!f.broken).length;
-    const fortEl=document.getElementById('hud-fort');
-    if(ownedForts>0){fortEl.textContent=`FORTS ${ownedForts}/4`;fortEl.style.color='#AAAAFF';fortEl.className='hud-item on';}
-    else{fortEl.textContent=`FORT $${FORTRESS_COST} [E]`;fortEl.style.color='';fortEl.className='hud-item';}
-
-    const comboEl=document.getElementById('hud-combo');
-    if(combo>=2){comboEl.textContent=`×${Math.min(4,1+~~((combo-1)/2))} COMBO`;comboEl.style.color=`rgb(255,${Math.min(255,150+combo*20)},0)`;}
-    else{comboEl.textContent='';}
-
-    const fcEl=document.getElementById('hud-fort-ctrl');
-    if(playerFortress){const hasTunnel=fortresses.some(f=>f!==playerFortress&&f.purchased&&!f.burning&&!f.broken);
-      fcEl.innerHTML=hasTunnel?'[T] tunnel<br>[E] exit<br>[U] upgrade':'[E] exit<br>[U] upgrade';}
-    else{fcEl.innerHTML='';}
-
-    const coinsEl=document.getElementById('hud-coins');
-    if(coins.length>0){const pulse=0.5+Math.abs(Math.sin(gameTime*3))*0.5;
-      coinsEl.textContent=`COINS: ${coins.length}`;coinsEl.style.opacity=pulse;}
-    else{coinsEl.textContent='';}
-
-    // Right — wanted
-    const starsEl=document.getElementById('hud-stars');
-    starsEl.textContent='★'.repeat(wantedLevel)+'☆'.repeat(5-wantedLevel);
-    starsEl.style.color=wantedLevel>=4?'#FF4444':wantedLevel>=2?'#FFA500':'#FFD700';
-
-    const bountyEl=document.getElementById('hud-bounty');
-    const armedEl=document.getElementById('hud-armed');
-    if(wantedLevel>=3){
-      const bounty=Math.floor(score/10)*10;
-      const flash=wantedLevel>=5?(0.6+Math.sin(gameTime*5)*0.4):0.8;
-      bountyEl.style.opacity=flash;
-      bountyEl.innerHTML=`REWARD<br>$${bounty.toLocaleString()}`;
-      armedEl.style.opacity=flash;
-      armedEl.textContent=wantedLevel>=5?'ARMED & DANGEROUS':'';
-    }else{bountyEl.textContent='';armedEl.textContent='';}
-
-    const dodgeEl=document.getElementById('hud-dodge');
-    dodgeEl.textContent=dodgeCooldown>0?`ROLL ${Math.ceil(dodgeCooldown*10)/10}s`:'';
+    const hasTunnel=!!(playerFortress&&fortresses.some(f=>f!==playerFortress&&f.purchased&&!f.burning&&!f.broken));
+    try{ window.parent.postMessage({
+      type:'tortilla-slap-state',
+      score, money:player.money, health:playerHealth,
+      upgrades:{bat:upgrades.bat},
+      throwAmmo:player.throwAmmo,
+      goons:goons.length, maxGoons:MAX_GOONS,
+      ownedForts, wantedLevel,
+      combo, comboMult:combo>=2?Math.min(4,1+~~((combo-1)/2)):0,
+      inFortress:!!playerFortress, hasTunnel,
+      coins:coins.length,
+      bounty:Math.floor(score/10)*10,
+      dodgeCooldown, gameTime, gameOver,
+    },'*'); }catch(e){}
   }
 
   // ── RENDER ───────────────────────────────────────────────────────
@@ -1003,7 +921,7 @@
     ctx.font='19px Arial';ctx.fillStyle='#FF5555';ctx.fillText('♥'.repeat(playerHealth)+'♡'.repeat(3-playerHealth),16,52);
     ctx.font='bold 13px "Courier New"';ctx.fillStyle='#FFD700';ctx.fillText(`$ ${player.money}`,16,72);
 
-    updateSidePanels();
+    broadcastState();
 
 
     // Ticker
