@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tortilla Slap</title>
+  <style>* { margin:0; padding:0; } body { background:#000; overflow:hidden; } canvas { display:block; }</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  function resize(){ cv.width=window.innerWidth; cv.height=window.innerHeight; }
+  window.addEventListener('resize',resize); resize();
+
+  const TW=64, TH=32;
+  function p(x,y,z=0){
+    const cx=player.x+0.44, cy=player.y+0.35;
+    return { x: cv.width/2  + (x-cx-(y-cy))*(TW/2),
+             y: cv.height/2 + (x-cx+(y-cy))*(TH/2) - z*TH + 20 };
+  }
+  function tint(hex,f){
+    const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+    return `rgb(${Math.round(r*f)},${Math.round(g*f)},${Math.round(b*f)})`;
+  }
+  function poly(pts,col,edge='rgba(0,0,0,0.09)'){
+    ctx.beginPath(); pts.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));
+    ctx.closePath(); ctx.fillStyle=col; ctx.fill();
+    if(edge){ ctx.strokeStyle=edge; ctx.lineWidth=0.7; ctx.stroke(); }
+  }
+  function box(x,y,z,w,d,h,col){
+    poly([p(x,y,z+h),p(x+w,y,z+h),p(x+w,y+d,z+h),p(x,y+d,z+h)],tint(col,1.00));
+    poly([p(x,y+d,z),p(x+w,y+d,z),p(x+w,y+d,z+h),p(x,y+d,z+h)], tint(col,0.68));
+    poly([p(x+w,y,z),p(x+w,y+d,z),p(x+w,y+d,z+h),p(x+w,y,z+h)], tint(col,0.50));
+  }
+  function tile(gx,gy,col){ poly([p(gx,gy),p(gx+1,gy),p(gx+1,gy+1),p(gx,gy+1)],col,'rgba(0,0,0,0.05)'); }
+  function tileColor(gx,gy){
+    const b=((gy%8)+8)%8;
+    if(b===3||b===4) return gx%2===0?'#28283a':'#222232';
+    if(b===2||b===5) return gx%2===0?'#787888':'#6a6a78';
+    return (gx+gy)%2===0?'#2e5030':'#263e28';
+  }
+
+  // ── PALETTES ─────────────────────────────────────────────────────
+  const SHIRTS=['#4488EE','#44AA55','#CC8833','#AA44CC','#33AACC','#EE8833','#BB3366','#33CCAA'];
+  const HAIRS =['#1a1a44','#5a3320','#222244','#3a2010','#1a3a1a','#4a2020','#2a1a44','#1a4a3a'];
+  const PANTSC=['#442222','#224422','#222244','#442244','#224444'];
+  const OB_DEFS=[
+    {name:'bench',  w:0.85,d:0.40,cols:['#664422','#553311']},
+    {name:'hydrant',w:0.28,d:0.28,cols:['#CC2222','#AA1111']},
+    {name:'trash',  w:0.32,d:0.32,cols:['#556655','#667766']},
+    {name:'barrel', w:0.35,d:0.35,cols:['#885522','#994433']},
+  ];
+
+  // ── CONSTANTS ────────────────────────────────────────────────────
+  const POLICE_SCORES   =[1500,4000,8000,15000];
+  const STAND_COW_THRESH=5;
+  const BAT_COST        =15;
+  const THROW_AMMO_COST =5;
+  const THROW_AMMO_PACK =20;
+  const GOON_COST       =20;
+  const FORTRESS_COST   =50;
+  const REINFORCE_COST  =15;
+  const TURRET_COST     =25;
+  const BRIBE_COSTS     =[10,20,30];
+  const MAX_GOONS       =5;
+  const NPC_SPAWN_MAX   =30;
+  const GOON_COLORS     =['#FF8822','#22AAFF','#AA22FF','#22FFAA','#FF2299'];
+  const COMBO_WINDOW    =2.0;
+  const DODGE_SPEED     =9;
+  const DODGE_DUR       =0.32;
+  const DODGE_COOLDOWN  =1.2;
+
+  // ── STANDS ───────────────────────────────────────────────────────
+  const STANDS=[
+    {x:5,  y:-4, w:1.62,d:1.02},
+    {x:-12,y:5,  w:1.62,d:1.02},
+    {x:14, y:8,  w:1.62,d:1.02},
+    {x:2,  y:-16,w:1.62,d:1.02},
+  ];
+  const OWNERS=STANDS.map(s=>({
+    x:s.x+1.82,y:s.y+0.28,shirt:'#CC8833',hair:'#2a1810',pants:'#443322',
+    hitFlash:0,slapAnim:0,cowSlaps:0,cowed:false,coinTimer:0,stand:s,
+  }));
+  function nearestStand(nx,ny){
+    let best=STANDS[0],bestD=Infinity;
+    STANDS.forEach(s=>{ const d=Math.sqrt((nx-s.x-0.8)**2+(ny-s.y-0.5)**2); if(d<bestD){bestD=d;best=s;} });
+    return best;
+  }
+
+  // ── FORTRESSES ───────────────────────────────────────────────────
+  const FORT_DEFS=[{x:-6,y:-8},{x:14,y:-14},{x:-16,y:12},{x:12,y:16}];
+  const FORT_W=2.6,FORT_D=2.2;
+  function makeFortress(def){
+    return {x:def.x,y:def.y,w:FORT_W,d:FORT_D,
+      purchased:false,hp:20,maxHp:20,burning:false,burnTimer:0,broken:false,
+      reinforced:false,turretLevel:0,turretTimer:0,smoke:[]};
+  }
+  let fortresses=FORT_DEFS.map(makeFortress);
+  let playerFortress=null;
+
+  // ── UPGRADES / GOONS ─────────────────────────────────────────────
+  const upgrades={bat:false};
+  const goons=[];
+
+
+  // ── NEWSPAPER TICKER ─────────────────────────────────────────────
+  const HEADLINES=[
+    'TORTILLA MARKET REPORTS UNUSUAL ACTIVITY — VENDORS ON HIGH ALERT',
+    'WITNESSES DESCRIBE FLOUR-BASED ASSAULT ON MULTIPLE PEDESTRIANS',
+    'POLICE RESPOND TO DISTURBANCE: SUSPECT ARMED WITH CORN PRODUCT',
+    'OFFICER ALLEGEDLY ACCEPTED TORTILLAS AS PAYMENT — INVESTIGATION PENDING',
+    'COORDINATED SLAP GANG SPOTTED: AUTHORITIES URGE CAUTION',
+    'MYSTERIOUS COMPOUND PURCHASED DOWNTOWN — NEIGHBORS CONCERNED',
+    'CITY ON HIGH ALERT: REWARD OFFERED FOR INFORMATION LEADING TO ARREST',
+    'UNDERGROUND TUNNEL NETWORK DISCOVERED BENEATH LOCAL PROPERTIES',
+    'SUSPECT ACHIEVES UNPRECEDENTED SLAP STREAK — WITNESSES STUNNED',
+    'LOCAL VENDORS REPORT INTIMIDATION CAMPAIGN — "JUST TAKE THE TORTILLAS"',
+  ];
+  let ticker={text:'',x:0,speed:100,queued:[]};
+  function queueHeadline(t){ if(!ticker.queued.includes(t)) ticker.queued.push(t); }
+  function updateTicker(dt){
+    if(ticker.text&&ticker.x>-ctx.measureText(ticker.text).width-40){
+      ticker.x-=ticker.speed*dt;
+    } else if(ticker.queued.length>0){
+      ticker.text=ticker.queued.shift(); ticker.x=cv.width+20;
+    } else if(!ticker.text){
+      ticker.text=HEADLINES[~~(Math.random()*HEADLINES.length)]; ticker.x=cv.width+20;
+    } else {
+      ticker.text=HEADLINES[~~(Math.random()*HEADLINES.length)]; ticker.x=cv.width+20;
+    }
+  }
+
+  // ── STATE ────────────────────────────────────────────────────────
+  const player={x:0,y:0,speed:4,slapAnim:0,money:0,throwAmmo:0};
+  let walkCycle=0,walkTimer=0,score=0,scoreTimer=0,gameTime=0;
+  let playerHealth=3,playerHitFlash=0,playerInvincible=0;
+  let playerVx=0,playerVy=0;
+  let combo=0,comboTimer=0;
+  let dodgeTimer=0,dodgeCooldown=0,dodgeVx=0,dodgeVy=0;
+  let gameOver=false,wantedLevel=0,policeIdx=0,npcSpawnTimer=14.0;
+  const slapFX=[],NPCs=[],obstacles=[],coins=[],projectiles=[];
+
+  // ── INPUT ────────────────────────────────────────────────────────
+  const keys={};
+  let pendingSlap=false,pendingBribe=false,pendingTunnel=false,pendingAmmo=false,spaceDown=false;
+  const MOVE=new Set(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright']);
+  window.addEventListener('keydown',e=>{
+    const k=e.key.toLowerCase();
+    if(MOVE.has(k)) e.preventDefault();
+    if(k===' '){ e.preventDefault(); if(!spaceDown){spaceDown=true;pendingSlap=true;} if(gameOver)restartGame(); }
+    if(k==='e'&&!gameOver) handleE();
+    if(k==='u'&&!gameOver) handleU();
+    if(k==='t'&&!gameOver) pendingTunnel=true;
+    if(k==='b'&&!gameOver) pendingBribe=true;
+    if(k==='r'&&!gameOver) pendingAmmo=true;
+    if(k==='enter'&&gameOver) restartGame();
+    keys[k]=true;
+  });
+  window.addEventListener('keyup',e=>{ const k=e.key.toLowerCase(); if(k===' ')spaceDown=false; keys[k]=false; });
+
+  // ── E KEY ────────────────────────────────────────────────────────
+  function handleE(){
+    if(playerFortress){
+      const f=playerFortress;
+      player.x=f.x+f.w*0.5+1.8; player.y=f.y+f.d*0.5+1.4;
+      playerFortress=null; playerInvincible=1.5;
+      slapFX.push({x:player.x,y:player.y-1,z:2.2,t:1.2,text:'ESCAPED!',col:'#88FFAA'});
+      return;
+    }
+    for(const f of fortresses){
+      if(f.broken||f.burning) continue;
+      const fcx=f.x+f.w*0.5,fcy=f.y+f.d*0.5;
+      if(Math.sqrt((player.x+0.44-fcx)**2+(player.y+0.35-fcy)**2)<3.2){
+        if(!f.purchased){
+          if(player.money>=FORTRESS_COST){
+            player.money-=FORTRESS_COST; f.purchased=true; score+=200;
+            slapFX.push({x:fcx-0.5,y:fcy-0.8,z:2.6,t:2.2,text:'FORTRESS BOUGHT!',col:'#AAAAFF'});
+            queueHeadline('MYSTERIOUS COMPOUND PURCHASED DOWNTOWN — NEIGHBORS CONCERNED');
+          } else {
+            slapFX.push({x:fcx,y:fcy-0.4,z:2.0,t:1.2,text:`NEED $${FORTRESS_COST}`,col:'#FF8888'});
+            return;
+          }
+        }
+        playerFortress=f; playerInvincible=9999;
+        player.x=fcx-0.44; player.y=fcy-0.35;
+        slapFX.push({x:fcx,y:fcy-0.4,z:2.0,t:1.0,text:'INSIDE!',col:'#AAAAFF'});
+        return;
+      }
+    }
+  }
+
+  // ── U KEY (fortress upgrades) ────────────────────────────────────
+  function handleU(){
+    for(const f of fortresses){
+      if(!f.purchased||f.broken||f.burning) continue;
+      const fcx=f.x+f.w*0.5,fcy=f.y+f.d*0.5;
+      if(Math.sqrt((player.x+0.44-fcx)**2+(player.y+0.35-fcy)**2)<3.2){
+        if(!f.reinforced&&player.money>=REINFORCE_COST){
+          f.reinforced=true; f.maxHp+=10; f.hp=Math.min(f.hp+10,f.maxHp);
+          player.money-=REINFORCE_COST;
+          slapFX.push({x:fcx,y:fcy-0.8,z:2.4,t:1.8,text:'REINFORCED!',col:'#AAFFAA'});
+          return;
+        }
+        if(f.turretLevel<2&&player.money>=TURRET_COST){
+          f.turretLevel++; player.money-=TURRET_COST;
+          slapFX.push({x:fcx,y:fcy-0.8,z:2.4,t:1.8,text:`TURRET LV${f.turretLevel}!`,col:'#FFAAAA'});
+          return;
+        }
+        slapFX.push({x:fcx,y:fcy-0.4,z:2.0,t:1.2,
+          text:f.reinforced&&f.turretLevel>=2?'FULLY UPGRADED':`REINFORCE $${REINFORCE_COST} / TURRET $${TURRET_COST}`,
+          col:'#888888'});
+        return;
+      }
+    }
+  }
+
+  // ── NPC FACTORIES ────────────────────────────────────────────────
+  function makeNPC(ox,oy){
+    const i=~~(Math.random()*SHIRTS.length),a=Math.random()*Math.PI*2,d=8+Math.random()*8;
+    return {x:ox+Math.cos(a)*d,y:oy+Math.sin(a)*d,
+      shirt:SHIRTS[i],hair:HAIRS[i],pants:PANTSC[~~(Math.random()*PANTSC.length)],
+      state:'wandering',stateTimer:Math.random()*1.5,
+      targetX:ox+(Math.random()-.5)*10,targetY:oy+(Math.random()-.5)*10,
+      targetStand:STANDS[0],walkCycle:0,walkTimer:0,speed:1.2+Math.random()*0.5,
+      hitCooldown:0,health:1,maxHealth:1,isPolice:false,hitFlash:0,
+      slapAnim:0,hasTortilla:false,firstSlapped:false,
+      bribeLevel:0,throwCooldown:0,guardFort:null,gangId:null};
+  }
+  function makePolice(ox,oy){
+    const a=Math.random()*Math.PI*2,d=14+Math.random()*4;
+    return {x:ox+Math.cos(a)*d,y:oy+Math.sin(a)*d,
+      shirt:'#1e3060',hair:'#1e3060',pants:'#0a0a20',
+      state:'chasing',stateTimer:0,targetX:ox,targetY:oy,
+      targetStand:STANDS[0],walkCycle:0,walkTimer:0,speed:3.0+Math.random()*0.4,
+      hitCooldown:0,health:3,maxHealth:3,isPolice:true,hitFlash:0,
+      slapAnim:0,hasTortilla:true,firstSlapped:false,
+      bribeLevel:0,throwCooldown:0,guardFort:null,gangId:null};
+  }
+
+  // ── GANG SPAWN ───────────────────────────────────────────────────
+  function spawnNPCOrGang(ox,oy){
+    const roll=Math.random();
+    const size=roll<0.5?1:roll<0.8?2:3;
+    const actual=Math.min(size,NPC_SPAWN_MAX-NPCs.length);
+    if(actual<=0) return;
+    const isGang=actual>1;
+    const gangId=isGang?Math.random():null;
+    const baseI=~~(Math.random()*SHIRTS.length);
+    for(let g=0;g<actual;g++){
+      const npc=makeNPC(ox,oy);
+      if(isGang){
+        npc.gangId=gangId;
+        npc.shirt=SHIRTS[baseI];
+        npc.x+=Math.cos(g/actual*Math.PI*2)*1.8;
+        npc.y+=Math.sin(g/actual*Math.PI*2)*1.8;
+      }
+      NPCs.push(npc);
+    }
+    if(isGang) queueHeadline('COORDINATED SLAP GANG SPOTTED: AUTHORITIES URGE CAUTION');
+  }
+
+  // ── OBSTACLE FACTORY ─────────────────────────────────────────────
+  function spawnOb(ox,oy){
+    for(let t=0;t<40;t++){
+      const a=Math.random()*Math.PI*2,d=6+Math.random()*16;
+      const x=ox+Math.cos(a)*d,y=oy+Math.sin(a)*d;
+      const band=((Math.floor(y)%8)+8)%8;
+      if(band===3||band===4) continue;
+      if((x-ox)**2+(y-oy)**2<16) continue;
+      let clash=false;
+      for(const ob of obstacles) if(Math.abs(ob.x-x)<2.8&&Math.abs(ob.y-y)<2.8){clash=true;break;}
+      if(clash) continue;
+      let near=false;
+      STANDS.forEach(s=>{ if(Math.abs(x-s.x)<3.5&&Math.abs(y-s.y)<3.0) near=true; });
+      FORT_DEFS.forEach(f=>{ if(Math.abs(x-f.x)<4.5&&Math.abs(y-f.y)<4.0) near=true; });
+      if(near) continue;
+      const def=OB_DEFS[~~(Math.random()*OB_DEFS.length)];
+      return {x,y,type:def.name,w:def.w,d:def.d,col:def.cols[~~(Math.random()*def.cols.length)]};
+    }
+    return null;
+  }
+
+  // ── INIT ─────────────────────────────────────────────────────────
+  function initNPCs(){ NPCs.length=0; for(let i=0;i<8;i++) NPCs.push(makeNPC(0,0)); }
+  function initObs(){ obstacles.length=0; for(let i=0;i<14;i++){ const ob=spawnOb(0,0); if(ob) obstacles.push(ob); } }
+  function resetOwners(){ OWNERS.forEach((ow,i)=>{ ow.x=STANDS[i].x+1.82;ow.y=STANDS[i].y+0.28;ow.hitFlash=0;ow.slapAnim=0;ow.cowSlaps=0;ow.cowed=false;ow.coinTimer=0; }); }
+  function resetFortresses(){ fortresses=FORT_DEFS.map(makeFortress); playerFortress=null; }
+  initNPCs(); initObs();
+
+  // ── SLAP LOGIC ───────────────────────────────────────────────────
+  function slapNPC(n,byGoon=false,byBat=false){
+    if(n.bribeLevel>0) return;
+    if(!byGoon&&!n.firstSlapped){
+      n.firstSlapped=true; player.money+=2;
+      slapFX.push({x:n.x+0.4,y:n.y-0.1,z:2.2,t:0.9,text:'+$2',col:'#FFD700'});
+    }
+    // Combo
+    combo++; comboTimer=COMBO_WINDOW;
+    const mult=Math.min(4,1+~~((combo-1)/2));
+    n.health--; n.hitFlash=0.25; n.hasTortilla=false;
+    // Gang alert
+    if(n.gangId!==null){
+      NPCs.forEach(m=>{ if(m!==n&&m.gangId===n.gangId&&(m.state==='wandering'||m.state==='waiting')){
+        m.state='chasing'; m.hasTortilla=true; } });
+    }
+    // Witness alert
+    NPCs.forEach(w=>{ if(w===n||w.bribeLevel>0||w.isPolice||w.state==='chasing'||w.state==='stunned') return;
+      if(Math.sqrt((w.x-n.x)**2+(w.y-n.y)**2)<5){ w.state='alarmed'; w.stateTimer=3.5; } });
+    if(n.health<=0){
+      if(byBat&&n.isPolice){ score+=(500*mult);
+        slapFX.push({x:n.x+0.2,y:n.y+0.1,z:2.0,t:1.0,text:'KO!!',col:'#FF44AA'});
+        const idx=NPCs.indexOf(n); if(idx!==-1) NPCs.splice(idx,1); return; }
+      n.state='stunned'; n.stateTimer=n.isPolice?0.9:1.6; n.health=n.maxHealth;
+      const base=n.isPolice?(byGoon?150:300):(byGoon?50:100);
+      score+=base*mult;
+      const txt=mult>1?`SLAP! ×${mult}`:'SLAP!';
+      slapFX.push({x:n.x+0.3,y:n.y+0.1,z:1.9,t:0.75,text:txt,col:mult>2?'#FF44FF':'#FF2020'});
+      if(combo>=5) queueHeadline('SUSPECT ACHIEVES UNPRECEDENTED SLAP STREAK — WITNESSES STUNNED');
+    } else {
+      score+=50*mult;
+      slapFX.push({x:n.x+0.3,y:n.y+0.1,z:1.9,t:0.75,text:'THUD!',col:'#FF8800'});
+    }
+  }
+
+  // ── BRIBE ────────────────────────────────────────────────────────
+  function tryBribe(){
+    let nearest=null,nearD=Infinity;
+    NPCs.forEach(n=>{ if(!n.isPolice||n.state==='stunned'||n.bribeLevel>=3) return;
+      const d=Math.sqrt((n.x-player.x)**2+(n.y-player.y)**2);
+      if(d<2.4&&d<nearD){nearest=n;nearD=d;} });
+    if(!nearest){ slapFX.push({x:player.x,y:player.y-0.8,z:2.2,t:1.0,text:'NO COP NEARBY',col:'#888888'}); return; }
+    const cost=BRIBE_COSTS[nearest.bribeLevel];
+    if(player.money<cost){ slapFX.push({x:player.x,y:player.y-0.8,z:2.2,t:1.0,text:`NEED $${cost}`,col:'#FF8888'}); return; }
+    player.money-=cost; nearest.bribeLevel++;
+    if(nearest.bribeLevel===1){ nearest.state='bribed'; nearest.speed=0.9;
+      slapFX.push({x:nearest.x,y:nearest.y-0.2,z:2.1,t:1.4,text:'BRIBED! ($10)',col:'#44FF88'});
+      queueHeadline('OFFICER ALLEGEDLY ACCEPTED CORN PRODUCTS AS PAYMENT — INVESTIGATION PENDING');
+    } else if(nearest.bribeLevel===2){ nearest.state='bribed_goon'; nearest.speed=2.8; nearest.hasTortilla=true;
+      slapFX.push({x:nearest.x,y:nearest.y-0.2,z:2.1,t:1.6,text:'GOON COP! ($20)',col:'#AAFFAA'});
+    } else {
+      let bestFort=null,bestFD=Infinity;
+      fortresses.forEach(f=>{ if(!f.purchased||f.burning||f.broken) return;
+        const fd=Math.sqrt((f.x-nearest.x)**2+(f.y-nearest.y)**2); if(fd<bestFD){bestFD=fd;bestFort=f;} });
+      nearest.state='bribed_guard'; nearest.guardFort=bestFort; nearest.hasTortilla=true;
+      slapFX.push({x:nearest.x,y:nearest.y-0.2,z:2.1,t:1.8,text:'FORT GUARD! ($30)',col:'#AAAAFF'});
+    }
+  }
+
+  // ── SLAP / THROW / DODGE ─────────────────────────────────────────
+  function trySlap(){
+    if(gameOver) return;
+    player.slapAnim=0.35;
+    if(playerFortress){
+      const f=playerFortress;
+      if(player.throwAmmo<=0){ slapFX.push({x:f.x+f.w*0.5,y:f.y+f.d*0.5-0.5,z:2.2,t:0.9,text:'NO AMMO!',col:'#FF4444'}); return; }
+      let tt=null,td=Infinity;
+      NPCs.forEach(n=>{ if(n.state==='stunned'||n.bribeLevel>0) return;
+        const dx=n.x-(f.x+f.w*0.5),dy=n.y-(f.y+f.d*0.5),d=Math.sqrt(dx*dx+dy*dy);
+        if(d<12&&d<td){tt=n;td=d;} });
+      if(tt){ player.throwAmmo--;
+        projectiles.push({x:f.x+f.w*0.5,y:f.y+f.d*0.5,z:2.0,target:tt,speed:10,age:0,initD:td,byBat:false}); }
+      return;
+    }
+    // Melee
+    let nearest=null,nearD=Infinity;
+    NPCs.forEach(n=>{ if(n.state==='stunned'||n.bribeLevel>0) return;
+      const dx=n.x-player.x,dy=n.y-player.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<1.8&&d<nearD){nearest=n;nearD=d;} });
+    if(nearest){ slapNPC(nearest,false,upgrades.bat&&nearest.isPolice); return; }
+    // Owner
+    for(const ow of OWNERS){
+      const od=Math.sqrt((ow.x-player.x)**2+(ow.y-player.y)**2);
+      if(od<1.8){ ow.hitFlash=0.28; ow.slapAnim=0.35;
+        if(!ow.cowed){ ow.cowSlaps++;
+          if(ow.cowSlaps>=STAND_COW_THRESH){ ow.cowed=true; ow.coinTimer=0;
+            slapFX.push({x:ow.x+0.1,y:ow.y-0.1,z:2.1,t:1.4,text:'DEAL!',col:'#FFD700'}); score+=200;
+          } else { slapFX.push({x:ow.x+0.3,y:ow.y+0.1,z:1.9,t:0.75,text:'SLAP!',col:'#FF2020'}); score+=25; }
+        } else { ow.coinTimer=0; slapFX.push({x:ow.x,y:ow.y,z:1.9,t:0.6,text:'$$$',col:'#FFD700'}); }
+        return; }
+    }
+    // Ranged throw
+    if(player.throwAmmo>0){
+      let tt=null,td=Infinity;
+      NPCs.forEach(n=>{ if(n.state==='stunned'||n.bribeLevel>0) return;
+        const dx=n.x-player.x,dy=n.y-player.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d>=1.8&&d<8&&d<td){tt=n;td=d;} });
+      if(tt){ player.throwAmmo--;
+        projectiles.push({x:player.x+0.84,y:player.y+0.08,z:1.46,target:tt,speed:10,age:0,initD:td,byBat:false}); return; }
+    }
+    // Dodge roll (SPACE with no target)
+    if(dodgeCooldown<=0){
+      let dvx=0,dvy=0;
+      if(keys['w']||keys['arrowup']){dvx-=1;dvy-=1;}
+      if(keys['s']||keys['arrowdown']){dvx+=1;dvy+=1;}
+      if(keys['a']||keys['arrowleft']){dvx-=1;dvy+=1;}
+      if(keys['d']||keys['arrowright']){dvx+=1;dvy-=1;}
+      const dl=Math.sqrt(dvx*dvx+dvy*dvy);
+      if(dl>0){ dodgeVx=dvx/dl; dodgeVy=dvy/dl;
+        dodgeTimer=DODGE_DUR; dodgeCooldown=DODGE_COOLDOWN;
+        playerInvincible=Math.max(playerInvincible,DODGE_DUR+0.1);
+        slapFX.push({x:player.x,y:player.y,z:1.8,t:0.5,text:'ROLL!',col:'#88FFFF'}); }
+    }
+  }
+
+  function buyAmmo(){
+    if(player.money>=THROW_AMMO_COST){ player.money-=THROW_AMMO_COST; player.throwAmmo+=THROW_AMMO_PACK;
+      slapFX.push({x:player.x,y:player.y-1,z:2.6,t:1.4,text:`+${THROW_AMMO_PACK} TORTILLAS`,col:'#E8C840'});
+    } else { slapFX.push({x:player.x,y:player.y-0.8,z:2.2,t:1.0,text:`NEED $${THROW_AMMO_COST}`,col:'#FF8888'}); }
+  }
+
+  function tryTunnel(){
+    if(!playerFortress) return;
+    const dests=fortresses.filter(f=>f!==playerFortress&&f.purchased&&!f.burning&&!f.broken);
+    if(dests.length===0){ slapFX.push({x:playerFortress.x+playerFortress.w*0.5,y:playerFortress.y,z:2.4,t:1.5,text:'NO TUNNEL EXIT',col:'#FF8888'}); return; }
+    const target=dests[~~(Math.random()*dests.length)];
+    playerFortress=target; playerInvincible=9999;
+    player.x=target.x+target.w*0.5-0.44; player.y=target.y+target.d*0.5-0.35;
+    slapFX.push({x:target.x+target.w*0.5,y:target.y+target.d*0.5-0.5,z:2.4,t:1.6,text:'TUNNEL!',col:'#88AAFF'});
+    queueHeadline('UNDERGROUND TUNNEL NETWORK DISCOVERED BENEATH LOCAL PROPERTIES');
+  }
+
+  // ── NPC AI ───────────────────────────────────────────────────────
+  function updateNPCs(dt){
+    // Pre-compute chaser list for cornering AI
+    const activeChasers=NPCs.filter(n=>n.state==='chasing'&&n.bribeLevel===0);
+    activeChasers.forEach((n,idx)=>{ n._ci=idx; n._cc=activeChasers.length; });
+
+    for(let ni=NPCs.length-1;ni>=0;ni--){
+      const n=NPCs[ni];
+      n.hitFlash=Math.max(0,n.hitFlash-dt*3);
+      n.slapAnim=Math.max(0,n.slapAnim-dt);
+      if(n.throwCooldown>0) n.throwCooldown-=dt;
+
+      // ── bribed ────────────────────────────────────────────────
+      if(n.state==='bribed'){
+        n.walkTimer+=dt; if(n.walkTimer>0.28){n.walkTimer=0;n.walkCycle=1-n.walkCycle;}
+        n.x+=0.4*dt*(Math.sin(n.x*0.5)||1); n.y+=0.3*dt; continue;
+      }
+      if(n.state==='bribed_goon'){
+        let nearEnemy=null,nearD=Infinity;
+        NPCs.forEach(m=>{ if(m===n||m.bribeLevel>0||m.state==='stunned') return;
+          const d=Math.sqrt((m.x-n.x)**2+(m.y-n.y)**2); if(d<6&&d<nearD){nearEnemy=m;nearD=d;} });
+        if(nearEnemy){
+          const dx=nearEnemy.x-n.x,dy=nearEnemy.y-n.y,d=Math.sqrt(dx*dx+dy*dy);
+          if(d>1.6){ n.x+=dx/d*n.speed*dt;n.y+=dy/d*n.speed*dt;
+            n.walkTimer+=dt;if(n.walkTimer>0.16){n.walkTimer=0;n.walkCycle=1-n.walkCycle;} }
+          else if(n.throwCooldown<=0){ n.throwCooldown=1.8;n.slapAnim=0.35;
+            if(d>1.0){ projectiles.push({x:n.x+0.84,y:n.y+0.08,z:1.46,target:nearEnemy,speed:9,age:0,initD:d,byBat:false}); }
+            else { slapNPC(nearEnemy,true); } }
+        } else {
+          const dx=player.x-n.x,dy=player.y-n.y,d=Math.sqrt(dx*dx+dy*dy);
+          if(d>2.8){ n.x+=dx/d*n.speed*dt;n.y+=dy/d*n.speed*dt;
+            n.walkTimer+=dt;if(n.walkTimer>0.18){n.walkTimer=0;n.walkCycle=1-n.walkCycle;} }
+        } continue;
+      }
+      if(n.state==='bribed_guard'){
+        const f=n.guardFort;
+        if(!f||f.burning||f.broken){ n.state='bribed_goon';n.guardFort=null;continue; }
+        const fcx=f.x+f.w*0.5,fcy=f.y+f.d*0.5;
+        const ang=gameTime*0.6+(NPCs.indexOf(n)*1.4);
+        const tx=fcx+Math.cos(ang)*2.0,ty=fcy+Math.sin(ang)*1.1;
+        const dx=tx-n.x,dy=ty-n.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d>0.5){ n.x+=dx/d*2.5*dt;n.y+=dy/d*2.5*dt;
+          n.walkTimer+=dt;if(n.walkTimer>0.18){n.walkTimer=0;n.walkCycle=1-n.walkCycle;} }
+        if(n.throwCooldown<=0){
+          let tt=null,throwD=7;
+          NPCs.forEach(m=>{ if(m===n||m.bribeLevel>0||m.state==='stunned') return;
+            const md=Math.sqrt((m.x-fcx)**2+(m.y-fcy)**2); if(md<throwD){throwD=md;tt=m;} });
+          if(tt){ n.throwCooldown=2.2;n.slapAnim=0.35;
+            const initD=Math.sqrt((tt.x-n.x)**2+(tt.y-n.y)**2);
+            projectiles.push({x:n.x+0.84,y:n.y+0.08,z:1.46,target:tt,speed:9,age:0,initD,byBat:false}); }
+        } continue;
+      }
+      if(n.state==='alarmed'){
+        // Witness: run away from player, speed up NPC spawning
+        n.stateTimer-=dt;
+        const dx=n.x-player.x,dy=n.y-player.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d>0.1){ n.x+=dx/d*2.5*dt;n.y+=dy/d*2.5*dt;
+          n.walkTimer+=dt;if(n.walkTimer>0.16){n.walkTimer=0;n.walkCycle=1-n.walkCycle;} }
+        npcSpawnTimer=Math.min(npcSpawnTimer,4.0);
+        if(n.stateTimer<=0){ n.state='wandering'; n.targetX=n.x+(Math.random()-.5)*8; n.targetY=n.y+(Math.random()-.5)*8; }
+        continue;
+      }
+
+      // ── regular states ────────────────────────────────────────
+      if(n.state==='wandering'||n.state==='waiting'||n.state==='going_to_stand'){
+        if(Math.abs(n.x-player.x)>22||Math.abs(n.y-player.y)>22){
+          const a=Math.random()*Math.PI*2,d=10+Math.random()*4;
+          n.x=player.x+Math.cos(a)*d; n.y=player.y+Math.sin(a)*d;
+          n.state='wandering';n.stateTimer=0;n.hasTortilla=false;n.firstSlapped=false;
+          n.targetX=player.x+(Math.random()-.5)*8;n.targetY=player.y+(Math.random()-.5)*8;
+        }
+      }
+      if(n.state==='wandering'){
+        const dx=n.targetX-n.x,dy=n.targetY-n.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<0.3){ n.state='waiting';n.stateTimer=0.6+Math.random()*1.2;n.walkCycle=0; }
+        else{ n.x+=dx/d*n.speed*dt;n.y+=dy/d*n.speed*dt;
+          n.walkTimer+=dt;if(n.walkTimer>0.20){n.walkTimer=0;n.walkCycle=1-n.walkCycle;} }
+      } else if(n.state==='waiting'){
+        n.stateTimer-=dt;
+        if(n.stateTimer<=0){ n.targetX=n.x+(Math.random()-.5)*10;n.targetY=n.y+(Math.random()-.5)*10;n.state='wandering'; }
+      } else if(n.state==='going_to_stand'){
+        const dx=n.targetStand.x+0.5-n.x,dy=n.targetStand.y+0.5-n.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d<0.9){ n.state='buying';n.stateTimer=1.0+Math.random()*0.5;n.walkCycle=0; }
+        else{ n.x+=dx/d*n.speed*dt;n.y+=dy/d*n.speed*dt;
+          n.walkTimer+=dt;if(n.walkTimer>0.20){n.walkTimer=0;n.walkCycle=1-n.walkCycle;} }
+      } else if(n.state==='buying'){
+        n.stateTimer-=dt;
+        if(n.stateTimer<=0){
+          n.hasTortilla=true;n.state='chasing';n.speed=2.6+Math.random()*0.5;
+          coins.push({x:n.targetStand.x+0.2+Math.random()*1.0,y:n.targetStand.y+0.1+Math.random()*0.6,t:90.0});
+          slapFX.push({x:n.targetStand.x+0.9,y:n.targetStand.y+0.5,z:1.2,t:0.7,text:'+$1',col:'#FFD700'});
+        }
+      } else if(n.state==='stunned'){
+        n.stateTimer-=dt;n.walkCycle=0;
+        if(n.stateTimer<=0){
+          if(n.isPolice){ n.state='chasing';n.speed=3.3+Math.random()*0.4; }
+          else{ n.state='going_to_stand';n.targetStand=nearestStand(n.x,n.y);n.speed=1.6+Math.random()*0.4; }
+        }
+      } else if(n.state==='chasing'){
+        let ftx=player.x+0.44,fty=player.y+0.35;
+        if(playerFortress&&!playerFortress.burning){ ftx=playerFortress.x+playerFortress.w*0.5;fty=playerFortress.y+playerFortress.d*0.5; }
+
+        // ── cornering AI ──────────────────────────────────────────
+        if(!playerFortress){
+          const cc=n._cc||1, ci=n._ci||0;
+          // Spread chasers at different angles to prevent clumping
+          const spreadAng=(ci/cc)*Math.PI*2;
+          ftx+=Math.cos(spreadAng)*0.5;
+          fty+=Math.sin(spreadAng)*0.5;
+          // Flankers (every 3rd) intercept player's movement
+          if(cc>=3&&ci%3===0){
+            ftx+=playerVx*2.5;
+            fty+=playerVy*2.5;
+          }
+        }
+
+        const dx=ftx-(n.x+0.44),dy=fty-(n.y+0.35),d=Math.sqrt(dx*dx+dy*dy);
+        if(d>0.05){ n.x+=dx/d*n.speed*dt;n.y+=dy/d*n.speed*dt;
+          n.walkTimer+=dt;if(n.walkTimer>0.14){n.walkTimer=0;n.walkCycle=1-n.walkCycle;} }
+        if(d<1.0&&n.hitCooldown<=0&&playerInvincible<=0&&!playerFortress){
+          playerHealth=Math.max(0,playerHealth-1);
+          playerHitFlash=0.7;playerInvincible=2.0;n.hitCooldown=2.2;n.slapAnim=0.35;
+          combo=0; comboTimer=0;
+          slapFX.push({x:player.x+0.3,y:player.y-0.2,z:1.9,t:0.75,text:'SLAP!',col:'#FF2020'});
+          if(playerHealth<=0) gameOver=true;
+        }
+      }
+      if(n.hitCooldown>0) n.hitCooldown-=dt;
+    }
+    player.slapAnim=Math.max(0,player.slapAnim-dt);
+    playerInvincible=Math.max(0,playerInvincible-dt);
+    const rc=NPCs.filter(n=>n.state==='chasing'&&!n.isPolice&&n.bribeLevel===0).length;
+    const pc=NPCs.filter(n=>n.state==='chasing'&&n.isPolice&&n.bribeLevel===0).length;
+    wantedLevel=Math.min(5,rc+pc*2);
+  }
+
+  function updateNPCSpawning(dt){
+    npcSpawnTimer-=dt;
+    if(npcSpawnTimer<=0&&NPCs.length<NPC_SPAWN_MAX){
+      spawnNPCOrGang(player.x,player.y);
+      npcSpawnTimer=Math.max(5.0,30.0-gameTime/20.0);
+    }
+  }
+
+  function updateProjectiles(dt){
+    for(let i=projectiles.length-1;i>=0;i--){
+      const proj=projectiles[i]; proj.age+=dt;
+      const tx=proj.target.x+0.44,ty=proj.target.y+0.35;
+      const dx=tx-proj.x,dy=ty-proj.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<0.9||proj.age>2.5){
+        if(d<0.9&&proj.target.state!=='stunned'&&proj.target.bribeLevel===0) slapNPC(proj.target,true,proj.byBat);
+        projectiles.splice(i,1);
+      } else {
+        proj.x+=dx/d*proj.speed*dt;proj.y+=dy/d*proj.speed*dt;
+        proj.z=1.4+Math.sin(Math.max(0,Math.min(1,1-d/proj.initD))*Math.PI)*0.9;
+      }
+    }
+  }
+
+  function updateGoons(dt){
+    goons.forEach((g,gi)=>{
+      g.slapAnim=Math.max(0,g.slapAnim-dt);g.slashCooldown=Math.max(0,g.slashCooldown-dt);
+      let nearEnemy=null,nearD=Infinity;
+      NPCs.forEach(n=>{ if(n.state!=='chasing'||n.bribeLevel>0) return;
+        const d=Math.sqrt((n.x-g.x)**2+(n.y-g.y)**2); if(d<4.0&&d<nearD){nearEnemy=n;nearD=d;} });
+      if(nearEnemy){
+        const dx=nearEnemy.x-g.x,dy=nearEnemy.y-g.y,d=Math.sqrt(dx*dx+dy*dy);
+        if(d>1.4){ g.x+=dx/d*3.5*dt;g.y+=dy/d*3.5*dt;
+          g.walkTimer+=dt;if(g.walkTimer>0.16){g.walkTimer=0;g.walkCycle=1-g.walkCycle;} }
+        else if(g.slashCooldown<=0){ g.slapAnim=0.35;g.slashCooldown=1.4;slapNPC(nearEnemy,true); }
+      } else {
+        const ang=(gi/MAX_GOONS)*Math.PI*2;
+        const tdx=player.x+Math.cos(ang)*1.8-g.x,tdy=player.y+Math.sin(ang)*1.8-g.y;
+        const td=Math.sqrt(tdx*tdx+tdy*tdy);
+        if(td>1.6){ g.x+=tdx/td*3.5*dt;g.y+=tdy/td*3.5*dt;
+          g.walkTimer+=dt;if(g.walkTimer>0.16){g.walkTimer=0;g.walkCycle=1-g.walkCycle;} }
+        else { g.walkCycle=0; }
+      }
+    });
+  }
+
+  function updateOwners(dt){
+    OWNERS.forEach(ow=>{ ow.hitFlash=Math.max(0,ow.hitFlash-dt*3);ow.slapAnim=Math.max(0,ow.slapAnim-dt);
+      if(ow.cowed){ ow.coinTimer=Math.max(0,ow.coinTimer-dt);
+        if(Math.sqrt((player.x+0.44-ow.x-0.44)**2+(player.y+0.35-ow.y-0.35)**2)<4.5&&ow.coinTimer<=0){
+          ow.coinTimer=3.2; const count=1+(Math.random()<0.35?1:0);
+          for(let i=0;i<count;i++) coins.push({x:ow.stand.x+0.25+Math.random()*0.9,y:ow.stand.y+0.08+Math.random()*0.55,t:30.0});
+        } } });
+  }
+
+  function updateCoins(dt){
+    for(let i=coins.length-1;i>=0;i--){
+      coins[i].t-=dt; if(coins[i].t<=0){coins.splice(i,1);continue;}
+      const dx=player.x+0.44-(coins[i].x+0.09),dy=player.y+0.35-(coins[i].y+0.08),dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<1.2){ player.money++;
+        slapFX.push({x:coins[i].x,y:coins[i].y,z:1.2,t:0.65,text:'+$1',col:'#FFD700'});
+        coins.splice(i,1);
+      } else if(dist<2.8){ const spd=3.5*(1-dist/2.8); coins[i].x+=dx/dist*spd*dt;coins[i].y+=dy/dist*spd*dt; }
+    }
+  }
+
+  function checkUpgrades(){
+    if(!upgrades.bat&&player.money>=BAT_COST){ upgrades.bat=true;player.money-=BAT_COST;
+      slapFX.push({x:player.x,y:player.y-1,z:2.6,t:2.2,text:'BAT UNLOCKED!',col:'#FF44AA'}); return; }
+    if(goons.length<MAX_GOONS&&player.money>=GOON_COST){ player.money-=GOON_COST;
+      const gi=goons.length;
+      goons.push({x:player.x+Math.cos(gi/MAX_GOONS*Math.PI*2)*2.2,y:player.y+Math.sin(gi/MAX_GOONS*Math.PI*2)*2.2,
+        shirt:GOON_COLORS[gi%GOON_COLORS.length],hair:'#2a1810',pants:'#3a5522',walkCycle:0,walkTimer:0,slapAnim:0,slashCooldown:0});
+      slapFX.push({x:player.x,y:player.y-1,z:2.6,t:2.0,text:`GOON #${gi+1}!`,col:'#FF8822'}); return; }
+  }
+
+  // ── FORTRESS UPDATE ──────────────────────────────────────────────
+  function updateFortresses(dt){
+    fortresses.forEach(f=>{
+      for(let i=f.smoke.length-1;i>=0;i--){ f.smoke[i].t-=dt;f.smoke[i].z+=f.smoke[i].vz*dt; if(f.smoke[i].t<=0)f.smoke.splice(i,1); }
+      if(f.burning){
+        f.burnTimer-=dt;
+        if(Math.random()<dt*10) f.smoke.push({x:f.x+0.3+Math.random()*(f.w-0.3),y:f.y+0.3+Math.random()*(f.d-0.3),z:1.0+Math.random()*0.4,vz:1.0+Math.random()*0.6,t:2.0+Math.random()*1.0,maxT:3.0,col:Math.random()<0.4?'#CC4400':'#777777'});
+        if(f.burnTimer<=0){ f.burning=false;f.broken=true;f.smoke.length=0;
+          const others=fortresses.filter(o=>o!==f&&o.purchased&&!o.burning&&!o.broken);
+          if(others.length>0){ const dest=others[~~(Math.random()*others.length)];
+            NPCs.forEach(n=>{ if(n.state!=='chasing'||n.bribeLevel>0) return;
+              if(Math.sqrt((n.x-f.x-f.w*0.5)**2+(n.y-f.y-f.d*0.5)**2)<3.5&&Math.random()<0.5){
+                n.x=dest.x+dest.w*0.5+(Math.random()-.5)*2.5;n.y=dest.y+dest.d*0.5+(Math.random()-.5)*2.0;
+                slapFX.push({x:n.x,y:n.y,z:1.8,t:1.2,text:'THEY FOUND IT!',col:'#FF6644'}); } }); }
+        } return;
+      }
+      if(f.broken||!f.purchased) return;
+      const fcx=f.x+f.w*0.5,fcy=f.y+f.d*0.5;
+      if(playerFortress===f){
+        NPCs.forEach(n=>{ if(n.state!=='chasing'||n.bribeLevel>0) return;
+          const nd=Math.sqrt((n.x-fcx)**2+(n.y-fcy)**2);
+          if(nd<1.8&&n.hitCooldown<=0){ f.hp=Math.max(0,f.hp-1);n.hitCooldown=2.5;n.slapAnim=0.35;
+            if(f.hp<=0){ f.burning=true;f.burnTimer=3.5;
+              if(playerFortress===f){playerFortress=null;playerInvincible=2.0;}
+              slapFX.push({x:fcx,y:fcy-1,z:2.5,t:2.4,text:'FORTRESS BURNING!',col:'#FF6600'}); } } });
+        // Turret
+        if(f.turretLevel>0){ f.turretTimer-=dt;
+          const fireRate=f.turretLevel===1?2.5:1.4;
+          if(f.turretTimer<=0){ f.turretTimer=fireRate;
+            let tt=null,td=9;
+            NPCs.forEach(n=>{ if(n.bribeLevel>0||n.state==='stunned') return;
+              const d=Math.sqrt((n.x-fcx)**2+(n.y-fcy)**2); if(d<td){td=d;tt=n;} });
+            if(tt) projectiles.push({x:fcx,y:fcy,z:1.6,target:tt,speed:11,age:0,initD:td,byBat:false}); } }
+      }
+    });
+  }
+
+
+  function updateObs(){
+    for(let i=0;i<obstacles.length;i++){
+      const ob=obstacles[i];
+      if(Math.abs(ob.x-player.x)>24||Math.abs(ob.y-player.y)>24){ const nb=spawnOb(player.x,player.y); if(nb) obstacles[i]=nb; }
+    }
+  }
+  function resolveObs(){
+    if(playerFortress) return;
+    const r=0.38,px=player.x+0.44,py=player.y+0.35;
+    [...obstacles,...STANDS].forEach(ob=>{
+      const clx=Math.max(ob.x,Math.min(px,ob.x+ob.w)),cly=Math.max(ob.y,Math.min(py,ob.y+ob.d));
+      const dx=px-clx,dy=py-cly,dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<r){ const push=r-dist;
+        if(dist<0.001){player.x+=push;}else{player.x+=dx/dist*push;player.y+=dy/dist*push;} } });
+  }
+
+  function restartGame(){
+    player.x=0;player.y=0;player.slapAnim=0;player.money=0;player.throwAmmo=0;
+    playerHealth=3;playerHitFlash=0;playerInvincible=0;playerVx=0;playerVy=0;
+    score=0;wantedLevel=0;gameOver=false;gameTime=0;policeIdx=0;npcSpawnTimer=14.0;
+    combo=0;comboTimer=0;dodgeTimer=0;dodgeCooldown=0;
+    slapFX.length=0;coins.length=0;projectiles.length=0;goons.length=0;upgrades.bat=false;
+    ticker.text='';ticker.x=0;ticker.queued=[];
+    resetFortresses();initNPCs();initObs();resetOwners();
+  }
+
+  // ── DRAW FUNCTIONS ───────────────────────────────────────────────
+  function drawStandAt(sx,sy){
+    box(sx,sy,0,1.60,1.00,0.65,'#8B5E2A');box(sx-0.02,sy-0.02,0.65,1.64,1.04,0.08,'#C9A05A');
+    drawTortilla(sx+0.06,sy+0.10,0.73);drawTortilla(sx+0.72,sy+0.20,0.73);
+    box(sx-0.06,sy-0.06,0,0.12,0.12,1.50,'#5A3A10');box(sx+1.54,sy-0.06,0,0.12,0.12,1.50,'#5A3A10');
+    box(sx-0.12,sy-0.14,1.50,1.84,0.24,0.14,'#CC3311');box(sx-0.12,sy-0.14,1.44,1.84,0.24,0.08,'#881100');
+    for(let i=0;i<4;i++) box(sx-0.10+i*0.42,sy-0.14,1.50,0.22,0.24,0.14,'#EE5522');
+    box(sx+0.24,sy-0.14,1.68,1.12,0.10,0.20,'#E8C840');box(sx+0.28,sy-0.14,1.88,1.04,0.10,0.04,'#AA8800');
+  }
+  function drawFortBack(f){
+    if(f.broken) return;
+    const ratio=f.purchased?f.hp/f.maxHp:1;
+    const wc=f.burning?'#BB4400':(f.purchased?(ratio>0.5?'#7A6040':(ratio>0.25?'#9A5030':'#BB3020')):'#4a4a5a');
+    box(f.x+0.25,f.y+0.25,0,f.w-0.50,f.d-0.50,0.05,tint(wc,0.35));
+    box(f.x,f.y,0,f.w,0.28,1.2,wc);box(f.x,f.y+0.28,0,0.28,f.d-0.28,1.2,wc);box(f.x+f.w-0.28,f.y+0.28,0,0.28,f.d-0.28,1.2,wc);
+    if(!f.purchased){
+      const fcx=f.x+f.w*0.5,fcy=f.y+f.d-0.05;
+      box(fcx-0.04,fcy+0.04,0,0.08,0.08,1.10,'#774422');box(fcx-0.28,fcy-0.02,1.10,0.56,0.10,0.32,'#EEDD44');
+      const sp=p(fcx,fcy+0.02,1.38);
+      ctx.save();ctx.font='bold 9px Arial';ctx.textAlign='center';
+      ctx.fillStyle='#111';ctx.fillText('FOR SALE',sp.x,sp.y);
+      ctx.fillStyle='#CC1100';ctx.font='bold 10px Arial';ctx.fillText(`$${FORTRESS_COST}`,sp.x,sp.y+10);ctx.restore();
+    }
+    if(f.turretLevel>0){
+      const tx=f.x+f.w*0.5-0.15,ty=f.y+0.30;
+      box(tx,ty,1.2,0.30,0.26,0.28,'#667788');
+      box(tx+0.06,ty+0.04,1.48,0.18,0.12,0.10,'#88AACC');
+      if(f.turretLevel>=2){ box(tx-0.06,ty-0.02,1.2,0.06,0.06,0.28,'#667788');box(tx+0.30,ty-0.02,1.2,0.06,0.06,0.28,'#667788'); }
+    }
+  }
+  function drawFortFront(f){
+    if(f.broken) return;
+    const ratio=f.purchased?f.hp/f.maxHp:1;
+    const wc=f.burning?'#BB4400':(f.purchased?(ratio>0.5?'#7A6040':(ratio>0.25?'#9A5030':'#BB3020')):'#4a4a5a');
+    box(f.x+0.28,f.y+f.d-0.28,0,f.w*0.32,0.28,1.2,wc);box(f.x+f.w*0.66,f.y+f.d-0.28,0,f.w*0.34-0.28,0.28,1.2,wc);
+    if(f.purchased&&!f.burning){
+      const bw=f.w/f.maxHp;
+      for(let i=0;i<f.maxHp;i++) box(f.x+i*bw,f.y-0.14,1.2,bw*0.80,0.10,0.10,i<f.hp?(ratio>0.5?'#44FF44':(ratio>0.25?'#FFAA00':'#FF4422')):'#222233');
+    }
+    if(f.burning) for(let fi=0;fi<8;fi++){
+      const fx=f.x+0.2+Math.sin(gameTime*7+fi*0.9)*0.15+(fi%4)*0.6,fy=f.y+0.2+Math.cos(gameTime*5+fi*0.7)*0.08+(~~(fi/4))*0.5;
+      box(fx,fy,0.9+Math.abs(Math.sin(gameTime*8+fi))*0.7,0.20,0.15,0.26,fi%3===0?'#FF6600':fi%3===1?'#FFCC00':'#FF3300');
+    }
+  }
+  function drawFortSmoke(f){ f.smoke.forEach(s=>{ const sp=p(s.x,s.y,s.z);
+    ctx.save();ctx.globalAlpha=Math.max(0,(s.t/s.maxT)*0.7);ctx.fillStyle=s.col;
+    ctx.beginPath();ctx.ellipse(sp.x,sp.y,16,9,0,0,Math.PI*2);ctx.fill();ctx.restore(); }); }
+  function drawCoin(c){ box(c.x,c.y,0.08,0.18,0.16,0.18,'#FFD700');box(c.x+0.04,c.y+0.03,0.26,0.10,0.10,0.04,'#FFEE88'); }
+  function drawTortilla(wx,wy,wz){
+    box(wx,wy,wz,0.58,0.52,0.09,'#e8c86e');box(wx+0.06,wy+0.06,wz+0.09,0.12,0.11,0.04,'#8B5020');
+    box(wx+0.34,wy+0.28,wz+0.09,0.11,0.10,0.04,'#8B5020');box(wx+0.10,wy+0.34,wz+0.09,0.09,0.10,0.04,'#7A4012');
+  }
+  function drawBat(cx,cy,wz,swing){
+    const bx=cx+0.86,by=cy+0.08-0.28*swing,bz=wz-0.32*swing;
+    box(bx+0.05,by+0.09,bz,0.09,0.08,0.34,'#8B4513');box(bx+0.02,by+0.05,bz+0.34,0.16,0.14,0.30,'#BBBBBB');box(bx,by+0.03,bz+0.60,0.20,0.18,0.08,'#999999');
+  }
+  function drawOb(ob){
+    const{x,y,type:t,col}=ob;
+    if(t==='car'){ box(x,y,0,1.80,0.85,0.50,col);box(x+0.28,y+0.10,0.50,1.24,0.65,0.30,tint(col,0.80));
+      box(x+0.30,y+0.76,0.54,1.20,0.04,0.22,'#88bbdd');box(x+0.30,y+0.05,0.54,0.04,0.71,0.22,'#88bbdd');
+    } else if(t==='bench'){ box(x,y,0.28,0.85,0.40,0.07,col);box(x+0.06,y+0.08,0,0.13,0.10,0.28,'#443322');box(x+0.66,y+0.08,0,0.13,0.10,0.28,'#443322');
+    } else if(t==='hydrant'){ box(x,y,0,0.28,0.28,0.12,tint(col,0.7));box(x+0.04,y+0.04,0.12,0.20,0.20,0.30,col);
+      box(x+0.08,y+0.08,0.42,0.12,0.12,0.10,tint(col,0.7));box(x-0.05,y+0.08,0.20,0.09,0.12,0.09,col);box(x+0.24,y+0.08,0.20,0.09,0.12,0.09,col);
+    } else if(t==='trash'){ box(x,y,0,0.32,0.32,0.44,col);box(x-0.02,y-0.02,0.44,0.36,0.36,0.06,tint(col,0.6));
+    } else if(t==='barrel'){ box(x,y,0,0.35,0.35,0.48,col);box(x,y,0.14,0.35,0.35,0.04,tint(col,0.6));box(x,y,0.32,0.35,0.35,0.04,tint(col,0.6)); }
+  }
+  function drawChar(cx,cy,shirt,pants,hair,raised,wk,isPolice,slapAnim=0){
+    const sk='#F2B87A',shoe='#181828';
+    const lz=wk===1?0.06:0,rz=wk===0?0.06:0;
+    const swing=slapAnim>0?Math.sin((1-slapAnim/0.35)*Math.PI):0;
+    const armDY=-0.28*swing,armDZ=raised?-0.32*swing:0.42*swing;
+    box(cx-0.24,cy+0.14,0.62,0.20,0.34,0.34,shirt);box(cx-0.24,cy+0.14,0.22,0.20,0.34,0.40,sk);
+    box(cx+0.08,cy+0.04,0,0.29,0.50,0.13,shoe);box(cx+0.51,cy+0.04,0,0.29,0.50,0.13,shoe);
+    box(cx+0.10,cy+0.08,0.13+lz,0.27,0.42,0.43,pants);box(cx+0.51,cy+0.08,0.13+rz,0.27,0.42,0.43,pants);
+    box(cx+0.02,cy+0.03,0.56,0.84,0.72,0.58,shirt);
+    if(isPolice) box(cx+0.54,cy+0.73,0.88,0.14,0.05,0.14,'#FFD700');
+    box(cx+0.13,cy+0.13,1.14,0.60,0.54,0.60,sk);box(cx+0.13,cy+0.13,1.74,0.60,0.54,0.13,hair);
+    if(isPolice) box(cx+0.09,cy+0.65,1.74,0.68,0.08,0.06,hair);
+    const ey=cy+0.67;
+    box(cx+0.22,ey-0.01,1.44,0.14,0.025,0.14,'#0a0a1c');box(cx+0.50,ey-0.01,1.44,0.14,0.025,0.14,'#0a0a1c');
+    if(raised){ box(cx+0.86,cy+0.12+armDY,1.00+armDZ,0.20,0.34,0.38,shirt);box(cx+0.86,cy+0.12+armDY,1.38+armDZ,0.20,0.34,0.22,sk); }
+    else       { box(cx+0.86,cy+0.12+armDY,0.62+armDZ,0.20,0.34,0.34,shirt);box(cx+0.86,cy+0.12+armDY,0.22+armDZ,0.20,0.34,0.40,sk); }
+  }
+  function drawStunStars(cx,cy){ for(let i=0;i<3;i++){ const a=gameTime*3.5+(i/3)*Math.PI*2;
+    box(cx+0.44+Math.cos(a)*0.30-0.06,cy+0.35+Math.sin(a)*0.16-0.06,2.05,0.12,0.12,0.12,'#FFE040'); } }
+  function drawAngry(cx,cy){ box(cx+0.40,cy+0.30,2.05,0.10,0.10,0.22,'#FF2020');box(cx+0.40,cy+0.30,1.97,0.10,0.10,0.06,'#FF2020'); }
+  function drawHealthPips(n){ for(let i=0;i<n.maxHealth;i++) box(n.x+0.14+i*0.22,n.y+0.28,2.10,0.16,0.12,0.14,i<n.health?'#FF4444':'#333344'); }
+  function drawOwnerIndicator(ow){
+    if(ow.cowed){ const bob=Math.sin(gameTime*4)*0.05; box(ow.x+0.28,ow.y+0.22,2.10+bob,0.24,0.18,0.24,'#44CC44');
+    } else if(ow.cowSlaps>0){ for(let i=0;i<STAND_COW_THRESH;i++) box(ow.x+0.06+i*0.22,ow.y+0.22,2.10,0.16,0.12,0.12,i<ow.cowSlaps?'#FF4444':'#333344'); } }
+  function drawSlapFX(fx){
+    const sp=p(fx.x,fx.y,fx.z),alpha=Math.min(1,Math.max(0,fx.t/0.75));
+    ctx.save();ctx.globalAlpha=alpha;ctx.translate(sp.x,sp.y);ctx.rotate(-0.22);
+    ctx.font='bold 28px Impact,Arial Black';ctx.strokeStyle='#fff';ctx.lineWidth=3.5;ctx.strokeText(fx.text,0,0);
+    ctx.fillStyle=fx.col;ctx.fillText(fx.text,0,0);
+    for(let i=0;i<6;i++){const a=(i/6)*Math.PI*2;ctx.fillStyle='#FFE040';ctx.beginPath();ctx.arc(Math.cos(a)*26,Math.sin(a)*26,3,0,Math.PI*2);ctx.fill();}
+    ctx.restore();
+  }
+
+  // ── RENDER ───────────────────────────────────────────────────────
+  function render(){
+    ctx.fillStyle='#131b2e';ctx.fillRect(0,0,cv.width,cv.height);
+    const px=Math.round(player.x),py=Math.round(player.y),R=13;
+    const tiles=[];
+    for(let gx=px-R;gx<=px+R;gx++) for(let gy=py-R;gy<=py+R;gy++) tiles.push([gx,gy]);
+    tiles.sort(([ax,ay],[bx,by])=>(ax+ay)-(bx+by));
+    tiles.forEach(([gx,gy])=>{ tile(gx,gy,tileColor(gx,gy));
+      if(((gy%8)+8)%8===3&&gx%2===0) box(gx+0.35,gy+0.88,0.01,0.28,0.07,0.02,'#d0d0c4'); });
+
+    const sh=p(player.x+0.44,player.y+0.44,0);
+    ctx.fillStyle='rgba(0,0,0,0.18)';ctx.beginPath();ctx.ellipse(sh.x,sh.y,22,10,0,0,Math.PI*2);ctx.fill();
+
+    const blink=(playerInvincible>0&&playerInvincible<9990&&!playerFortress)&&(Math.floor(gameTime*6)%2===0);
+    const isDodging=dodgeTimer>0;
+    const pSwing=player.slapAnim>0?Math.sin((1-player.slapAnim/0.35)*Math.PI):0;
+    const tortY=player.y+0.08-0.28*pSwing,tortZ=1.46-0.32*pSwing;
+
+    const drawables=[
+      {type:'player',key:player.x+player.y},
+      {type:'weapon',key:player.x+0.84+tortY},
+      ...NPCs.map(n=>({type:'npc',n,key:n.x+n.y})),
+      ...obstacles.map(ob=>({type:'ob',ob,key:ob.x+ob.y})),
+      ...STANDS.map(s=>({type:'stand',s,key:s.x+s.y})),
+      ...OWNERS.map(ow=>({type:'owner',ow,key:ow.x+ow.y})),
+      ...coins.map(c=>({type:'coin',c,key:c.x+c.y})),
+      ...projectiles.map((pr,i)=>({type:'proj',pr,i,key:pr.x+pr.y})),
+      ...goons.map((g,i)=>({type:'goon',g,i,key:g.x+g.y})),
+      ...goons.map((g,i)=>({type:'goonWeap',g,i,key:g.x+0.84+g.y+0.08})),
+    ];
+    fortresses.forEach(f=>{ if(f.broken) return;
+      drawables.push({type:'fortBack', f,key:f.x+f.y-0.01});
+      drawables.push({type:'fortFront',f,key:f.x+f.y+f.d-0.1});
+      if(f.smoke.length>0) drawables.push({type:'fortSmoke',f,key:f.x+f.y+f.d+0.1});
+    });
+    drawables.sort((a,b)=>a.key-b.key);
+
+    drawables.forEach(d=>{
+      if(d.type==='stand'){ drawStandAt(d.s.x,d.s.y);
+      } else if(d.type==='owner'){ const ow=d.ow;
+        if(ow.hitFlash>0){ctx.save();ctx.globalAlpha=ow.hitFlash/0.28*0.45;drawChar(ow.x,ow.y,'#fff','#fff','#fff',false,0,false,0);ctx.restore();}
+        drawChar(ow.x,ow.y,ow.shirt,ow.pants,ow.hair,false,0,false,ow.slapAnim); drawOwnerIndicator(ow);
+      } else if(d.type==='coin'){ drawCoin(d.c);
+
+      } else if(d.type==='proj'){ const w=Math.sin(gameTime*14+d.i)*0.04; drawTortilla(d.pr.x+w,d.pr.y-w,d.pr.z);
+      } else if(d.type==='goon'){ const g=d.g;
+        const gsh=p(g.x+0.44,g.y+0.44,0);
+        ctx.fillStyle='rgba(255,136,34,0.16)';ctx.beginPath();ctx.ellipse(gsh.x,gsh.y,22,10,0,0,Math.PI*2);ctx.fill();
+        drawChar(g.x,g.y,g.shirt,g.pants,g.hair,true,g.walkCycle,false,g.slapAnim);
+      } else if(d.type==='goonWeap'){ const g=d.g;
+        const gSw=g.slapAnim>0?Math.sin((1-g.slapAnim/0.35)*Math.PI):0;
+        drawTortilla(g.x+0.84,g.y+0.08-0.28*gSw,1.46-0.32*gSw);
+      } else if(d.type==='fortBack'){ drawFortBack(d.f);
+      } else if(d.type==='fortFront'){ drawFortFront(d.f);
+      } else if(d.type==='fortSmoke'){ drawFortSmoke(d.f);
+      } else if(d.type==='player'){
+        if(!blink&&!playerFortress){
+          if(isDodging){ctx.save();ctx.globalAlpha=0.55;drawChar(player.x-dodgeVx*0.3,player.y-dodgeVy*0.3,'#EE3333','#1a3dbb','#5a3320',true,walkCycle,false,0);ctx.restore();}
+          drawChar(player.x,player.y,'#EE3333','#1a3dbb','#5a3320',true,walkCycle,false,player.slapAnim);
+        }
+        if(playerFortress){ const f=playerFortress,fp=p(f.x+f.w*0.5,f.y+f.d*0.5,1.3);
+          ctx.fillStyle='rgba(255,80,80,0.9)';ctx.font='bold 18px Arial';ctx.textAlign='center';ctx.fillText('👀',fp.x,fp.y); }
+      } else if(d.type==='weapon'){
+        if(!blink&&!playerFortress){
+          if(upgrades.bat) drawBat(player.x,player.y,tortZ,pSwing);
+          else drawTortilla(player.x+0.84,tortY,tortZ);
+        }
+      } else if(d.type==='ob'){ drawOb(d.ob);
+      } else { // npc
+        const n=d.n;
+        if(n.hitFlash>0){ctx.save();ctx.globalAlpha=n.hitFlash/0.25*0.4;drawChar(n.x,n.y,'#fff','#fff','#fff',false,0,false,0);ctx.restore();}
+        const nRaised=(n.state==='chasing'||n.state==='buying'||n.state==='bribed_goon'||n.state==='bribed_guard')&&n.hasTortilla;
+        let shirt=n.shirt,pants=n.pants;
+        if(n.bribeLevel===1) shirt='#336644';
+        if(n.bribeLevel>=2) shirt='#224433';
+        drawChar(n.x,n.y,shirt,pants,n.hair,nRaised,n.walkCycle,n.isPolice&&n.bribeLevel===0,n.slapAnim);
+        if(nRaised){ const nSw=n.slapAnim>0?Math.sin((1-n.slapAnim/0.35)*Math.PI):0;
+          drawTortilla(n.x+0.84,n.y+0.08-0.28*nSw,1.46-0.32*nSw); }
+        if(n.state==='stunned') drawStunStars(n.x,n.y);
+        if(n.state==='chasing'&&!n.isPolice&&n.bribeLevel===0) drawAngry(n.x,n.y);
+        if(n.isPolice&&n.bribeLevel===0) drawHealthPips(n);
+        if(n.state==='going_to_stand'){ const bob=Math.abs(Math.sin(gameTime*4))*0.05;
+          box(n.x+0.35,n.y+0.25,2.05+bob,0.10,0.10,0.18,'#FFD700'); }
+        if(n.state==='alarmed'){ const ep=p(n.x+0.44,n.y+0.35,2.1);
+          ctx.save();ctx.font='bold 14px Arial';ctx.fillStyle='#FFFF44';ctx.textAlign='center';ctx.fillText('!',ep.x,ep.y);ctx.restore(); }
+        if(n.isPolice&&n.bribeLevel>0){ const bc=n.bribeLevel===1?'#44FF88':n.bribeLevel===2?'#AAFFAA':'#AAAAFF';
+          box(n.x+0.28,n.y+0.22,2.16,0.20,0.15,0.20,bc); }
+        if(n.gangId!==null&&n.state==='chasing'){ const gp=p(n.x+0.44,n.y+0.35,2.2);
+          ctx.save();ctx.font='bold 11px Arial';ctx.fillStyle='#FF8800';ctx.textAlign='center';ctx.fillText('👊',gp.x,gp.y);ctx.restore(); }
+      }
+    });
+
+    slapFX.forEach(fx=>drawSlapFX(fx));
+    if(playerHitFlash>0){ctx.fillStyle=`rgba(220,20,20,${playerHitFlash*0.4})`;ctx.fillRect(0,0,cv.width,cv.height);}
+    if(playerFortress){ctx.strokeStyle='rgba(100,140,255,0.45)';ctx.lineWidth=8;ctx.strokeRect(4,4,cv.width-8,cv.height-8);}
+
+    // ── HUD ───────────────────────────────────────────────────────
+    ctx.textAlign='center';ctx.font='bold 28px Impact,Arial Black';
+    ctx.strokeStyle='rgba(0,0,0,0.85)';ctx.lineWidth=5;ctx.strokeText('TORTILLA SLAP',cv.width/2,36);
+    ctx.fillStyle='#FFE040';ctx.fillText('TORTILLA SLAP',cv.width/2,36);
+    ctx.textAlign='left';
+    ctx.font='bold 13px "Courier New"';ctx.fillStyle='rgba(255,255,255,0.7)';ctx.fillText(`SCORE  ${score.toLocaleString()}`,16,26);
+    ctx.font='19px Arial';ctx.fillStyle='#FF5555';ctx.fillText('♥'.repeat(playerHealth)+'♡'.repeat(3-playerHealth),16,52);
+    ctx.font='bold 13px "Courier New"';ctx.fillStyle='#FFD700';ctx.fillText(`$ ${player.money}`,16,72);
+    ctx.font='bold 11px "Courier New"';
+    ctx.fillStyle=upgrades.bat?'#FF44AA':'rgba(255,255,255,0.28)';ctx.fillText(upgrades.bat?'BAT ✓':`BAT $${BAT_COST}`,16,90);
+    ctx.fillStyle=player.throwAmmo>0?'#E8C840':'rgba(255,255,255,0.28)';ctx.fillText(player.throwAmmo>0?`THROW ×${player.throwAmmo}`:`THROW $${THROW_AMMO_COST}[R]`,100,90);
+    ctx.fillStyle=goons.length>0?'#FF9933':'rgba(255,255,255,0.28)';ctx.fillText(goons.length>0?`GOONS ${goons.length}/${MAX_GOONS}`:`GOON $${GOON_COST}`,230,90);
+    const ownedForts=fortresses.filter(f=>f.purchased&&!f.broken).length;
+    ctx.fillStyle=ownedForts>0?'#AAAAFF':'rgba(255,255,255,0.28)';ctx.fillText(ownedForts>0?`FORTS ${ownedForts}/4`:`FORT $${FORTRESS_COST}[E]`,16,104);
+    if(combo>=2){ ctx.fillStyle=`rgba(255,${150+combo*20},0,0.95)`;ctx.font=`bold ${11+combo}px Impact`;ctx.fillText(`×${Math.min(4,1+~~((combo-1)/2))} COMBO`,16,120); }
+    if(playerFortress){ const hasTunnel=fortresses.some(f=>f!==playerFortress&&f.purchased&&!f.burning&&!f.broken);
+      ctx.font='bold 11px "Courier New"';ctx.fillStyle='rgba(100,160,255,0.9)';ctx.fillText(hasTunnel?'T tunnel  E exit  U upgrade':'E exit  U upgrade',16,combo>=2?134:120); }
+    if(coins.length>0){ const pulse=0.5+Math.abs(Math.sin(gameTime*3))*0.5;
+      ctx.font='bold 11px "Courier New"';ctx.fillStyle=`rgba(255,215,0,${pulse})`;ctx.fillText(`COINS WAITING: ${coins.length}`,16,combo>=2?148:134); }
+
+    // Wanted stars + poster
+    ctx.textAlign='right';ctx.font='11px Arial';ctx.fillStyle='rgba(255,255,255,0.55)';ctx.fillText('WANTED',cv.width-14,22);
+    ctx.font='18px Arial';ctx.fillStyle='#FFD700';ctx.fillText('★'.repeat(wantedLevel)+'☆'.repeat(5-wantedLevel),cv.width-12,42);
+    if(wantedLevel>=3){
+      const bounty=Math.floor(score/10)*10;
+      const flash=wantedLevel>=5?(0.6+Math.sin(gameTime*5)*0.4):0.8;
+      ctx.font='bold 10px "Courier New"';ctx.fillStyle=`rgba(255,${wantedLevel>=5?80:180},100,${flash})`;
+      ctx.fillText(`REWARD: $${bounty.toLocaleString()}`,cv.width-12,58);
+      if(wantedLevel>=5){ ctx.font='bold 9px "Courier New"';ctx.fillStyle=`rgba(255,60,60,${flash})`;ctx.fillText('ARMED & DANGEROUS',cv.width-12,72); }
+    }
+    // Dodge cooldown pip
+    if(dodgeCooldown>0){ ctx.textAlign='center';ctx.font='9px Courier';ctx.fillStyle='rgba(136,255,255,0.6)';
+      ctx.fillText(`ROLL ${Math.ceil(dodgeCooldown*10)/10}s`,cv.width/2,cv.height-24); }
+
+
+    // Ticker
+    if(ticker.text){
+      ctx.save();ctx.font='bold 11px "Courier New"';
+      const tw=ctx.measureText('📰 '+ticker.text).width;
+      ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(ticker.x-4,cv.height-40,tw+12,18);
+      ctx.fillStyle='rgba(255,220,100,0.85)';ctx.textAlign='left';ctx.fillText('📰 '+ticker.text,ticker.x,cv.height-26);
+      ctx.restore();
+    }
+
+    if(gameOver){
+      ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(0,0,cv.width,cv.height);
+      ctx.textAlign='center';ctx.font='bold 64px Impact,Arial Black';
+      ctx.strokeStyle='rgba(0,0,0,0.9)';ctx.lineWidth=8;ctx.strokeText('GAME OVER',cv.width/2,cv.height/2-24);
+      ctx.fillStyle='#FF2020';ctx.fillText('GAME OVER',cv.width/2,cv.height/2-24);
+      ctx.font='bold 22px "Courier New"';ctx.strokeStyle='rgba(0,0,0,0.8)';ctx.lineWidth=4;
+      ctx.strokeText(`SCORE: ${score.toLocaleString()}`,cv.width/2,cv.height/2+28);
+      ctx.fillStyle='#FFE040';ctx.fillText(`SCORE: ${score.toLocaleString()}`,cv.width/2,cv.height/2+28);
+      ctx.font='14px Segoe UI';ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fillText('SPACE or ENTER to play again',cv.width/2,cv.height/2+70);
+    }
+  }
+
+  // ── GAME LOOP ─────────────────────────────────────────────────────
+  let lastTime=0;
+  function loop(now){
+    const dt=Math.min((now-lastTime)/1000,0.05);lastTime=now;gameTime+=dt;
+    playerHitFlash=Math.max(0,playerHitFlash-dt*2);
+    comboTimer=Math.max(0,comboTimer-dt); if(comboTimer<=0&&combo>0) combo=0;
+    dodgeTimer=Math.max(0,dodgeTimer-dt); dodgeCooldown=Math.max(0,dodgeCooldown-dt);
+    for(let i=slapFX.length-1;i>=0;i--){slapFX[i].t-=dt;if(slapFX[i].t<=0)slapFX.splice(i,1);}
+    if(!gameOver){
+      let dx=0,dy=0;
+      if(keys['w']||keys['arrowup']){dx-=1;dy-=1;}
+      if(keys['s']||keys['arrowdown']){dx+=1;dy+=1;}
+      if(keys['a']||keys['arrowleft']){dx-=1;dy+=1;}
+      if(keys['d']||keys['arrowright']){dx+=1;dy-=1;}
+      const moving=dx!==0||dy!==0;
+      if(dodgeTimer>0){ player.x+=dodgeVx*DODGE_SPEED*dt;player.y+=dodgeVy*DODGE_SPEED*dt; }
+      if(moving&&!playerFortress){
+        const len=Math.sqrt(dx*dx+dy*dy);
+        if(dodgeTimer<=0){ player.x+=(dx/len)*player.speed*dt;player.y+=(dy/len)*player.speed*dt; }
+        walkTimer+=dt;if(walkTimer>0.16){walkTimer=0;walkCycle=1-walkCycle;}
+        scoreTimer+=dt;if(scoreTimer>0.10){scoreTimer=0;score+=5;}
+        playerVx=playerVx*0.85+(dx/len)*0.15; playerVy=playerVy*0.85+(dy/len)*0.15;
+      } else if(!moving){ walkCycle=0; playerVx*=0.9; playerVy*=0.9; }
+      resolveObs();
+      if(pendingSlap){trySlap();pendingSlap=false;}
+      if(pendingBribe){tryBribe();pendingBribe=false;}
+      if(pendingTunnel){tryTunnel();pendingTunnel=false;}
+      if(pendingAmmo){buyAmmo();pendingAmmo=false;}
+      updateNPCs(dt);updateNPCSpawning(dt);updateObs();
+      updateOwners(dt);updateCoins(dt);updateProjectiles(dt);
+      updateGoons(dt);updateFortresses(dt);updateTicker(dt);
+      checkUpgrades();
+      if(policeIdx<POLICE_SCORES.length&&score>=POLICE_SCORES[policeIdx]){
+        NPCs.push(makePolice(player.x,player.y));policeIdx++;
+        queueHeadline('POLICE RESPOND TO DISTURBANCE: SUSPECT ARMED WITH CORN PRODUCT');
+      }
+    }
+    render();requestAnimationFrame(loop);
+  }
+  queueHeadline('TORTILLA MARKET REPORTS UNUSUAL ACTIVITY TODAY — VENDORS ON HIGH ALERT');
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

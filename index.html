@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Theron's Arcade</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #06080f;
+      --surface: #0d1120;
+      --border: rgba(80,120,255,0.18);
+      --accent: #3b6fff;
+      --glow: rgba(59,111,255,0.35);
+      --text: #e8eaf6;
+      --dim: rgba(232,234,246,0.45);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* ── STAR FIELD ─────────────────────────────────────── */
+    #stars {
+      position: fixed; inset: 0; z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ── GRID OVERLAY ───────────────────────────────────── */
+    #grid {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(59,111,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,111,255,0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 40%, transparent 100%);
+    }
+
+    /* ── HEADER ─────────────────────────────────────────── */
+    header {
+      position: relative; z-index: 10;
+      text-align: center;
+      padding: 64px 20px 40px;
+    }
+
+    .arcade-title {
+      font-size: clamp(2.4rem, 6vw, 5rem);
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #fff;
+      text-shadow:
+        0 0 12px rgba(59,111,255,0.9),
+        0 0 40px rgba(59,111,255,0.5),
+        0 0 80px rgba(59,111,255,0.2);
+      animation: flicker 8s infinite;
+    }
+    .arcade-sub {
+      margin-top: 12px;
+      font-size: 0.78rem;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+
+    @keyframes flicker {
+      0%,97%,100% { opacity: 1; }
+      98% { opacity: 0.88; }
+      99% { opacity: 1; }
+      99.5% { opacity: 0.82; }
+    }
+
+    /* ── GAME GRID ──────────────────────────────────────── */
+    .grid {
+      position: relative; z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 28px;
+      justify-content: center;
+      padding: 20px 40px 80px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .card {
+      width: 280px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+      position: relative;
+    }
+    .card::before {
+      content: '';
+      position: absolute; inset: 0; border-radius: 16px;
+      background: linear-gradient(135deg, rgba(59,111,255,0.07), transparent 60%);
+      pointer-events: none;
+    }
+    .card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(59,111,255,0.55);
+      box-shadow:
+        0 12px 40px rgba(0,0,0,0.6),
+        0 0 0 1px rgba(59,111,255,0.3),
+        0 0 30px var(--glow);
+    }
+
+    .card-art {
+      width: 100%; height: 160px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 4rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .card-art canvas {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+    }
+    .card-art .emoji {
+      position: relative; z-index: 2;
+      filter: drop-shadow(0 4px 14px rgba(0,0,0,0.7));
+      font-size: 3.4rem;
+    }
+
+    .card-body {
+      padding: 18px 20px 22px;
+    }
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .card-desc {
+      font-size: 0.82rem;
+      line-height: 1.55;
+      color: var(--dim);
+      margin-bottom: 18px;
+    }
+    .card-tags {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .tag {
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      color: var(--dim);
+    }
+    .play-btn {
+      display: block; width: 100%;
+      padding: 11px;
+      background: linear-gradient(135deg, #2a56e8, #1a3cbf);
+      border: none; border-radius: 9px;
+      color: #fff;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: opacity 0.15s, box-shadow 0.15s;
+      box-shadow: 0 4px 18px rgba(42,86,232,0.4);
+    }
+    .play-btn:hover {
+      opacity: 0.88;
+      box-shadow: 0 6px 24px rgba(42,86,232,0.6);
+    }
+
+    /* coming soon card */
+    .card.coming-soon {
+      opacity: 0.45;
+      cursor: default;
+      pointer-events: none;
+    }
+    .card.coming-soon .play-btn {
+      background: rgba(255,255,255,0.06);
+      box-shadow: none;
+    }
+
+    /* ── OVERLAY MODAL ──────────────────────────────────── */
+    #overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(4,6,14,0.96);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #overlay.active { display: flex; }
+
+    #overlay-bar {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 8px 10px;
+      flex-shrink: 0;
+    }
+    #overlay-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    #close-btn {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 16px;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #close-btn:hover { background: rgba(255,255,255,0.13); }
+
+    #game-frame-wrap {
+      flex: 1;
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 8px 16px;
+    }
+    #game-frame {
+      width: 100%;
+      height: 100%;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 0 80px rgba(59,111,255,0.15);
+      background: #06080f;
+    }
+
+    /* ── FOOTER ─────────────────────────────────────────── */
+    footer {
+      position: relative; z-index: 10;
+      text-align: center;
+      padding: 20px;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      color: rgba(232,234,246,0.2);
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+<div id="grid"></div>
+
+<header>
+  <div class="arcade-title">Theron's Arcade</div>
+  <div class="arcade-sub">Select your game &mdash; insert coin</div>
+</header>
+
+<div class="grid" id="game-grid">
+
+  <div class="card" data-src="games/tortilla-slap.html" data-title="Tortilla Slap">
+    <div class="card-art" style="background: linear-gradient(135deg, #1a2640 0%, #0c1820 100%);">
+      <span class="emoji">🫓</span>
+    </div>
+    <div class="card-body">
+      <div class="card-title">Tortilla Slap</div>
+      <div class="card-desc">Isometric street brawler. Slap NPCs, dodge cops, bribe the law, and fortify your turf — one tortilla at a time.</div>
+      <div class="card-tags">
+        <span class="tag">Arcade</span>
+        <span class="tag">Isometric</span>
+        <span class="tag">Action</span>
+      </div>
+      <button class="play-btn">▶ Play</button>
+    </div>
+  </div>
+
+  <!-- placeholder cards for future games -->
+  <div class="card coming-soon">
+    <div class="card-art" style="background: linear-gradient(135deg, #1a2010 0%, #0c150a 100%);">
+      <span class="emoji">🔬</span>
+    </div>
+    <div class="card-body">
+      <div class="card-title">Coming Soon</div>
+      <div class="card-desc">Another experiment is cooking in the lab.</div>
+      <div class="card-tags"><span class="tag">TBD</span></div>
+      <button class="play-btn">— Locked —</button>
+    </div>
+  </div>
+
+  <div class="card coming-soon">
+    <div class="card-art" style="background: linear-gradient(135deg, #1a1030 0%, #100a20 100%);">
+      <span class="emoji">🎲</span>
+    </div>
+    <div class="card-body">
+      <div class="card-title">Coming Soon</div>
+      <div class="card-desc">Something new is on the way.</div>
+      <div class="card-tags"><span class="tag">TBD</span></div>
+      <button class="play-btn">— Locked —</button>
+    </div>
+  </div>
+
+</div>
+
+<footer>Theron's Arcade &mdash; 2026</footer>
+
+<!-- ── OVERLAY ──────────────────────────────────── -->
+<div id="overlay">
+  <div id="overlay-bar">
+    <span id="overlay-title"></span>
+    <button id="close-btn">✕ &nbsp;Back to Lobby</button>
+  </div>
+  <div id="game-frame-wrap">
+    <iframe id="game-frame" src="" allowfullscreen></iframe>
+  </div>
+</div>
+
+<script>
+// ── STARFIELD ────────────────────────────────────────────────
+(function() {
+  const cv = document.getElementById('stars');
+  const ctx = cv.getContext('2d');
+  let W, H, stars = [];
+
+  function resize() {
+    W = cv.width  = window.innerWidth;
+    H = cv.height = window.innerHeight;
+  }
+
+  function initStars(n = 260) {
+    stars = Array.from({length: n}, () => ({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 1.2 + 0.2,
+      a: Math.random(),
+      s: (Math.random() * 0.4 + 0.1) * (Math.random() < 0.5 ? 1 : -1),
+    }));
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    stars.forEach(s => {
+      s.a += s.s * 0.006;
+      if (s.a > 1) s.s *= -1;
+      if (s.a < 0) s.s *= -1;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(180,200,255,${Math.max(0, Math.min(1, s.a))})`;
+      ctx.fill();
+    });
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', () => { resize(); initStars(); });
+  resize(); initStars(); draw();
+})();
+
+// ── GAME CARD OPEN / CLOSE ───────────────────────────────────
+const overlay    = document.getElementById('overlay');
+const frame      = document.getElementById('game-frame');
+const titleEl    = document.getElementById('overlay-title');
+const closeBtn   = document.getElementById('close-btn');
+
+document.getElementById('game-grid').addEventListener('click', e => {
+  const card = e.target.closest('.card[data-src]');
+  if (!card) return;
+  const src   = card.dataset.src;
+  const title = card.dataset.title;
+  titleEl.textContent = title;
+  frame.src = src;
+  overlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+});
+
+function closeOverlay() {
+  overlay.classList.remove('active');
+  frame.src = '';
+  document.body.style.overflow = '';
+}
+
+closeBtn.addEventListener('click', closeOverlay);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOverlay(); });
+</script>
+</body>
+</html>
