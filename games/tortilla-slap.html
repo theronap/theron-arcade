@@ -151,6 +151,8 @@
   const BRIBE_COSTS     =[10,20,30];
   const HEART_COST      =25;
   const MAX_HEALTH      =5;
+  const KID_BRIBE_COST  =8;
+  const MAX_KIDS        =2;
   const MAX_GOONS       =5;
   const NPC_SPAWN_MAX   =30;
   const GOON_COLORS     =['#FF8822','#22AAFF','#AA22FF','#22FFAA','#FF2299'];
@@ -337,6 +339,18 @@
       bribeLevel:0,throwCooldown:0,guardFort:null,gangId:null};
   }
 
+  function makeKid(ox,oy){
+    const a=Math.random()*Math.PI*2,d=5+Math.random()*7;
+    return {x:ox+Math.cos(a)*d,y:oy+Math.sin(a)*d,
+      shirt:'#FFD700',hair:'#553311',pants:'#44AAEE',
+      state:'wandering',stateTimer:Math.random()*1.2,
+      targetX:ox+(Math.random()-.5)*8,targetY:oy+(Math.random()-.5)*8,
+      targetStand:STANDS[0],walkCycle:0,walkTimer:0,speed:1.6,
+      hitCooldown:0,health:1,maxHealth:1,isPolice:false,isKid:true,hitFlash:0,
+      slapAnim:0,hasTortilla:false,firstSlapped:false,
+      bribeLevel:0,throwCooldown:0,guardFort:null,gangId:null};
+  }
+
   // ── GANG SPAWN ───────────────────────────────────────────────────
   function spawnNPCOrGang(ox,oy){
     const roll=Math.random();
@@ -381,7 +395,7 @@
   }
 
   // ── INIT ─────────────────────────────────────────────────────────
-  function initNPCs(){ NPCs.length=0; for(let i=0;i<8;i++) NPCs.push(makeNPC(0,0)); }
+  function initNPCs(){ NPCs.length=0; for(let i=0;i<8;i++) NPCs.push(makeNPC(0,0)); NPCs.push(makeKid(0,0));NPCs.push(makeKid(0,0)); }
   function initObs(){ obstacles.length=0; for(let i=0;i<14;i++){ const ob=spawnOb(0,0); if(ob) obstacles.push(ob); } }
   function resetOwners(){ OWNERS.forEach((ow,i)=>{ ow.x=STANDS[i].x+1.82;ow.y=STANDS[i].y+0.28;ow.hitFlash=0;ow.slapAnim=0;ow.cowSlaps=0;ow.cowed=false;ow.coinTimer=0; }); }
   function resetFortresses(){ fortresses=FORT_DEFS.map(makeFortress); playerFortress=null; }
@@ -390,6 +404,7 @@
   // ── SLAP LOGIC ───────────────────────────────────────────────────
   function slapNPC(n,byGoon=false,byBat=false){
     if(n.bribeLevel>0) return;
+    if(n.isKid) return;
     if(!byGoon&&!n.firstSlapped){
       n.firstSlapped=true;
       coins.push({x:n.x+0.05+Math.random()*0.3,y:n.y+0.10+Math.random()*0.25,t:25.0});
@@ -402,7 +417,7 @@
         m.state='chasing'; m.hasTortilla=true; } });
     }
     // Witness alert
-    NPCs.forEach(w=>{ if(w===n||w.bribeLevel>0||w.isPolice||w.state==='chasing'||w.state==='stunned') return;
+    NPCs.forEach(w=>{ if(w===n||w.bribeLevel>0||w.isPolice||w.state==='chasing'||w.state==='stunned'||w.state==='bribed_kid') return;
       if(Math.sqrt((w.x-n.x)**2+(w.y-n.y)**2)<5){ w.state='alarmed'; w.stateTimer=3.5; } });
     if(n.health<=0){
       if(byBat&&n.isPolice){ score+=500;
@@ -425,7 +440,23 @@
     NPCs.forEach(n=>{ if(!n.isPolice||n.state==='stunned'||n.bribeLevel>=3) return;
       const d=Math.sqrt((n.x-player.x)**2+(n.y-player.y)**2);
       if(d<2.4&&d<nearD){nearest=n;nearD=d;} });
-    if(!nearest){ slapFX.push({x:player.x,y:player.y-0.8,z:2.2,t:1.0,text:'NO COP NEARBY',col:'#888888'}); return; }
+    if(!nearest){
+      // No cop — try bribing a nearby kid instead
+      const kidCount=NPCs.filter(n=>n.isKid&&n.state==='bribed_kid').length;
+      if(kidCount<MAX_KIDS){
+        let nearKid=null,nearKD=Infinity;
+        NPCs.forEach(n=>{ if(!n.isKid||n.state==='bribed_kid') return;
+          const d=Math.sqrt((n.x-player.x)**2+(n.y-player.y)**2);
+          if(d<2.4&&d<nearKD){nearKid=n;nearKD=d;} });
+        if(nearKid){
+          if(player.money<KID_BRIBE_COST){ slapFX.push({x:player.x,y:player.y-0.8,z:2.2,t:1.0,text:`NEED $${KID_BRIBE_COST}`,col:'#FF8888'}); return; }
+          player.money-=KID_BRIBE_COST; nearKid.state='bribed_kid';
+          slapFX.push({x:nearKid.x,y:nearKid.y-0.3,z:2.2,t:1.6,text:`KID HIRED! ($${KID_BRIBE_COST})`,col:'#FFDD44'});
+          return;
+        }
+      }
+      slapFX.push({x:player.x,y:player.y-0.8,z:2.2,t:1.0,text:'NO COP NEARBY',col:'#888888'}); return;
+    }
     const cost=BRIBE_COSTS[nearest.bribeLevel];
     if(player.money<cost){ slapFX.push({x:player.x,y:player.y-0.8,z:2.2,t:1.0,text:`NEED $${cost}`,col:'#FF8888'}); return; }
     player.money-=cost; nearest.bribeLevel++;
@@ -568,6 +599,27 @@
             projectiles.push({x:n.x+0.84,y:n.y+0.08,z:1.46,target:tt,speed:9,age:0,initD,byBat:false,firedBy:n}); }
         } continue;
       }
+      if(n.state==='bribed_kid'){
+        // Find nearest coin and run to it
+        let nearCoinIdx=-1,nearCoinD=Infinity;
+        coins.forEach((c,ci)=>{ const d=Math.sqrt((c.x-n.x)**2+(c.y-n.y)**2); if(d<nearCoinD){nearCoinD=d;nearCoinIdx=ci;} });
+        if(nearCoinIdx>=0&&nearCoinD<0.8){
+          player.money++;
+          slapFX.push({x:coins[nearCoinIdx].x,y:coins[nearCoinIdx].y,z:1.2,t:0.65,text:'+$1',col:'#FFD700'});
+          coins.splice(nearCoinIdx,1);
+        } else if(nearCoinIdx>=0){
+          const c=coins[nearCoinIdx];
+          const dx=c.x+0.09-n.x,dy=c.y+0.08-n.y,d=Math.sqrt(dx*dx+dy*dy);
+          if(d>0.1){n.x+=dx/d*3.0*dt;n.y+=dy/d*3.0*dt;}
+          n.walkTimer+=dt;if(n.walkTimer>0.14){n.walkTimer=0;n.walkCycle=1-n.walkCycle;}
+        } else {
+          // No coins — trail the player loosely
+          const dx=player.x-n.x,dy=player.y-n.y,d=Math.sqrt(dx*dx+dy*dy);
+          if(d>3.5){n.x+=dx/d*2.2*dt;n.y+=dy/d*2.2*dt;
+            n.walkTimer+=dt;if(n.walkTimer>0.18){n.walkTimer=0;n.walkCycle=1-n.walkCycle;}}
+        }
+        continue;
+      }
       if(n.state==='alarmed'){
         // Witness: run away from player, speed up NPC spawning
         n.stateTimer-=dt;
@@ -613,10 +665,11 @@
         if(n.stateTimer<=0){
           if(n.isPolice){ n.state='chasing';n.speed=3.3+Math.random()*0.4; }
           else{
-            // Teleport to the nearest stand so the trip can't be interrupted
-            const st=nearestStand(player.x,player.y);
-            n.x=st.x+0.3+Math.random()*0.8; n.y=st.y+0.1+Math.random()*0.5;
-            n.targetStand=st; n.state='buying'; n.stateTimer=0.6+Math.random()*0.4; n.walkCycle=0;
+            // Teleport to the stand FARTHEST from player so they don't respawn on top of coin spots
+            let farSt=STANDS[0],farD=0;
+            STANDS.forEach(s=>{ const sd=(s.x-player.x)**2+(s.y-player.y)**2; if(sd>farD){farD=sd;farSt=s;} });
+            n.x=farSt.x+0.3+Math.random()*0.8; n.y=farSt.y+0.1+Math.random()*0.5;
+            n.targetStand=farSt; n.state='buying'; n.stateTimer=0.6+Math.random()*0.4; n.walkCycle=0;
           }
         }
       } else if(n.state==='chasing'){
@@ -982,6 +1035,7 @@
         let shirt=n.shirt,pants=n.pants;
         if(n.bribeLevel===1) shirt='#336644';
         if(n.bribeLevel>=2) shirt='#224433';
+        if(n.state==='bribed_kid') shirt='#44BB44';
         drawChar(n.x,n.y,shirt,pants,n.hair,nRaised,n.walkCycle,n.isPolice&&n.bribeLevel===0,n.slapAnim);
         if(nRaised){ const nSw=n.slapAnim>0?Math.sin((1-n.slapAnim/0.35)*Math.PI):0;
           drawTortilla(n.x+0.84,n.y+0.08-0.28*nSw,1.46-0.32*nSw); }
@@ -996,6 +1050,8 @@
           box(n.x+0.28,n.y+0.22,2.16,0.20,0.15,0.20,bc); }
         if(n.gangId!==null&&n.state==='chasing'){ const gp=p(n.x+0.44,n.y+0.35,2.2);
           ctx.save();ctx.font='bold 11px Arial';ctx.fillStyle='#FF8800';ctx.textAlign='center';ctx.fillText('👊',gp.x,gp.y);ctx.restore(); }
+        if(n.state==='bribed_kid'){ const kp=p(n.x+0.44,n.y+0.35,2.2);
+          ctx.save();ctx.font='bold 15px Arial';ctx.fillStyle='#FFD700';ctx.textAlign='center';ctx.fillText('$',kp.x,kp.y);ctx.restore(); }
       }
     });
 
