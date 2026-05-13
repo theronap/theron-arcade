@@ -103,7 +103,6 @@
         const pdx=player.x+0.44-(car.x+car.w*0.5),pdy=player.y+0.35-(car.y+car.d*0.5);
         if(Math.abs(pdx)<car.w*0.5+0.2&&Math.abs(pdy)<car.d*0.5+0.2){
           playerHealth=Math.max(0,playerHealth-1);playerHitFlash=0.9;playerInvincible=2.5;
-          combo=0;comboTimer=0;
           slapFX.push({x:player.x,y:player.y-0.2,z:2.0,t:1.0,text:'HONK!!',col:'#FFDD00'});
           if(playerHealth<=0) gameOver=true;
         }
@@ -155,7 +154,6 @@
   const MAX_GOONS       =5;
   const NPC_SPAWN_MAX   =30;
   const GOON_COLORS     =['#FF8822','#22AAFF','#AA22FF','#22FFAA','#FF2299'];
-  const COMBO_WINDOW    =2.0;
   const DODGE_SPEED     =9;
   const DODGE_DUR       =0.32;
   const DODGE_COOLDOWN  =1.2;
@@ -225,7 +223,6 @@
   let walkCycle=0,walkTimer=0,score=0,scoreTimer=0,gameTime=0;
   let playerHealth=3,playerHitFlash=0,playerInvincible=0;
   let playerVx=0,playerVy=0;
-  let combo=0,comboTimer=0;
   let dodgeTimer=0,dodgeCooldown=0,dodgeVx=0,dodgeVy=0;
   let gameOver=false,wantedLevel=0,policeIdx=0,npcSpawnTimer=14.0;
   const slapFX=[],NPCs=[],obstacles=[],coins=[],projectiles=[];
@@ -394,12 +391,10 @@
   function slapNPC(n,byGoon=false,byBat=false){
     if(n.bribeLevel>0) return;
     if(!byGoon&&!n.firstSlapped){
-      n.firstSlapped=true; player.money+=5;
-      slapFX.push({x:n.x+0.4,y:n.y-0.1,z:2.2,t:0.9,text:'+$5',col:'#FFD700'});
+      n.firstSlapped=true;
+      coins.push({x:n.x+0.05+Math.random()*0.3,y:n.y+0.10+Math.random()*0.25,t:25.0});
+      coins.push({x:n.x+0.35+Math.random()*0.3,y:n.y+0.15+Math.random()*0.25,t:25.0});
     }
-    // Combo
-    combo++; comboTimer=COMBO_WINDOW;
-    const mult=Math.min(4,1+~~((combo-1)/2));
     n.health--; n.hitFlash=0.25; n.hasTortilla=false;
     // Gang alert
     if(n.gangId!==null){
@@ -410,18 +405,16 @@
     NPCs.forEach(w=>{ if(w===n||w.bribeLevel>0||w.isPolice||w.state==='chasing'||w.state==='stunned') return;
       if(Math.sqrt((w.x-n.x)**2+(w.y-n.y)**2)<5){ w.state='alarmed'; w.stateTimer=3.5; } });
     if(n.health<=0){
-      if(byBat&&n.isPolice){ score+=(500*mult);
+      if(byBat&&n.isPolice){ score+=500;
         slapFX.push({x:n.x+0.2,y:n.y+0.1,z:2.0,t:1.0,text:'KO!!',col:'#FF44AA'});
         const idx=NPCs.indexOf(n); if(idx!==-1) NPCs.splice(idx,1); return; }
       n.state='stunned'; n.stateTimer=n.isPolice?0.9:1.6; n.health=n.maxHealth;
       if(!byGoon&&!n.isPolice) coins.push({x:n.x+0.1+Math.random()*0.6,y:n.y+0.1+Math.random()*0.4,t:20.0});
       const base=n.isPolice?(byGoon?150:300):(byGoon?50:100);
-      score+=base*mult;
-      const txt=mult>1?`SLAP! ×${mult}`:'SLAP!';
-      slapFX.push({x:n.x+0.3,y:n.y+0.1,z:1.9,t:0.75,text:txt,col:mult>2?'#FF44FF':'#FF2020'});
-      if(combo>=5) queueHeadline('SUSPECT ACHIEVES UNPRECEDENTED SLAP STREAK — WITNESSES STUNNED');
+      score+=base;
+      slapFX.push({x:n.x+0.3,y:n.y+0.1,z:1.9,t:0.75,text:'SLAP!',col:'#FF2020'});
     } else {
-      score+=50*mult;
+      score+=50;
       slapFX.push({x:n.x+0.3,y:n.y+0.1,z:1.9,t:0.75,text:'THUD!',col:'#FF8800'});
     }
   }
@@ -619,6 +612,7 @@
         n.stateTimer-=dt;n.walkCycle=0;
         if(n.stateTimer<=0){
           if(n.isPolice){ n.state='chasing';n.speed=3.3+Math.random()*0.4; }
+          else if(n.firstSlapped){ n.state='chasing';n.hasTortilla=true;n.speed=2.2+Math.random()*0.5; }
           else{ n.state='going_to_stand';n.targetStand=nearestStand(n.x,n.y);n.speed=1.6+Math.random()*0.4; }
         }
       } else if(n.state==='chasing'){
@@ -645,7 +639,6 @@
         if(d<1.0&&n.hitCooldown<=0&&playerInvincible<=0&&!playerFortress){
           playerHealth=Math.max(0,playerHealth-1);
           playerHitFlash=0.7;playerInvincible=2.0;n.hitCooldown=2.2;n.slapAnim=0.35;
-          combo=0; comboTimer=0;
           slapFX.push({x:player.x+0.3,y:player.y-0.2,z:1.9,t:0.75,text:'SLAP!',col:'#FF2020'});
           if(playerHealth<=0) gameOver=true;
         }
@@ -798,7 +791,7 @@
     player.x=0;player.y=0;player.slapAnim=0;player.money=0;player.throwAmmo=0;
     playerHealth=3;playerHitFlash=0;playerInvincible=0;playerVx=0;playerVy=0;
     score=0;wantedLevel=0;gameOver=false;gameTime=0;policeIdx=0;npcSpawnTimer=14.0;
-    combo=0;comboTimer=0;dodgeTimer=0;dodgeCooldown=0;
+    dodgeTimer=0;dodgeCooldown=0;
     slapFX.length=0;coins.length=0;projectiles.length=0;goons.length=0;upgrades.bat=false;
     ticker.text='';ticker.x=0;ticker.queued=[];
     resetFortresses();initNPCs();initObs();initTraffic();resetOwners();
@@ -1048,7 +1041,6 @@
     lastFrame=now;
     const dt=Math.min((now-lastTime)/1000,0.05);lastTime=now;gameTime+=dt;
     playerHitFlash=Math.max(0,playerHitFlash-dt*2);
-    comboTimer=Math.max(0,comboTimer-dt); if(comboTimer<=0&&combo>0) combo=0;
     dodgeTimer=Math.max(0,dodgeTimer-dt); dodgeCooldown=Math.max(0,dodgeCooldown-dt);
     for(let i=slapFX.length-1;i>=0;i--){slapFX[i].t-=dt;if(slapFX[i].t<=0)slapFX.splice(i,1);}
     if(!gameOver){
