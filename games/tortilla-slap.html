@@ -580,7 +580,7 @@
       }
 
       // ── regular states ────────────────────────────────────────
-      if(n.state==='wandering'||n.state==='waiting'||n.state==='going_to_stand'){
+      if(n.state==='wandering'||n.state==='waiting'){
         if(Math.abs(n.x-player.x)>22||Math.abs(n.y-player.y)>22){
           const a=Math.random()*Math.PI*2,d=10+Math.random()*4;
           n.x=player.x+Math.cos(a)*d; n.y=player.y+Math.sin(a)*d;
@@ -612,8 +612,12 @@
         n.stateTimer-=dt;n.walkCycle=0;
         if(n.stateTimer<=0){
           if(n.isPolice){ n.state='chasing';n.speed=3.3+Math.random()*0.4; }
-          else if(n.firstSlapped){ n.state='chasing';n.hasTortilla=true;n.speed=2.2+Math.random()*0.5; }
-          else{ n.state='going_to_stand';n.targetStand=nearestStand(n.x,n.y);n.speed=1.6+Math.random()*0.4; }
+          else{
+            // Teleport to the nearest stand so the trip can't be interrupted
+            const st=nearestStand(player.x,player.y);
+            n.x=st.x+0.3+Math.random()*0.8; n.y=st.y+0.1+Math.random()*0.5;
+            n.targetStand=st; n.state='buying'; n.stateTimer=0.6+Math.random()*0.4; n.walkCycle=0;
+          }
         }
       } else if(n.state==='chasing'){
         let ftx=player.x+0.44,fty=player.y+0.35;
