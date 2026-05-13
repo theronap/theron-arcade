@@ -3,15 +3,69 @@
 <head>
   <meta charset="UTF-8">
   <title>Tortilla Slap</title>
-  <style>* { margin:0; padding:0; } body { background:#000; overflow:hidden; } canvas { display:block; }</style>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:#000;overflow:hidden;display:flex;height:100vh;width:100vw;}
+    #shell{display:flex;width:100vw;height:100vh;}
+    canvas{display:block;flex:1;min-width:0;}
+    .side-hud{
+      width:110px;flex-shrink:0;
+      background:#07090f;
+      padding:12px 9px;
+      font-family:'Courier New',monospace;
+      font-size:11px;
+      color:rgba(232,234,246,0.75);
+      display:flex;flex-direction:column;gap:3px;
+      overflow:hidden;
+    }
+    #left-hud{border-right:1px solid rgba(255,255,255,0.06);}
+    #right-hud{border-left:1px solid rgba(255,255,255,0.06);}
+    .hud-section-label{
+      font-size:8px;letter-spacing:0.22em;text-transform:uppercase;
+      color:rgba(255,255,255,0.25);margin-bottom:2px;margin-top:12px;
+    }
+    .hud-section-label:first-child{margin-top:0;}
+    .hud-item{padding:3px 0;color:rgba(232,234,246,0.38);transition:color 0.2s;}
+    .hud-item.on{color:rgba(232,234,246,0.92);}
+    #hud-combo{font-weight:bold;font-size:13px;margin-top:4px;min-height:18px;}
+    #hud-fort-ctrl{color:rgba(100,160,255,0.85);font-size:10px;line-height:1.7;margin-top:2px;}
+    #hud-coins{color:#FFD700;margin-top:2px;min-height:14px;}
+    #hud-stars{font-size:19px;letter-spacing:3px;margin:4px 0;}
+    #hud-bounty{color:#FF8888;font-size:10px;line-height:1.6;margin-top:4px;min-height:14px;}
+    #hud-dodge{color:rgba(136,255,255,0.75);font-size:10px;margin-top:6px;min-height:14px;}
+    #hud-armed{font-size:9px;color:#FF4444;font-weight:bold;letter-spacing:0.08em;margin-top:2px;}
+  </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<div id="shell">
+  <div id="left-hud" class="side-hud">
+    <div class="hud-section-label">Upgrades</div>
+    <div id="hud-bat"   class="hud-item">BAT $15</div>
+    <div id="hud-throw" class="hud-item">THROW $5 [R]</div>
+    <div id="hud-goon"  class="hud-item">GOON $20</div>
+    <div id="hud-fort"  class="hud-item">FORT $50 [E]</div>
+    <div id="hud-combo"></div>
+    <div id="hud-fort-ctrl"></div>
+    <div id="hud-coins"></div>
+  </div>
+  <canvas id="c"></canvas>
+  <div id="right-hud" class="side-hud">
+    <div class="hud-section-label">Wanted</div>
+    <div id="hud-stars">☆☆☆☆☆</div>
+    <div id="hud-bounty"></div>
+    <div id="hud-armed"></div>
+    <div id="hud-dodge"></div>
+  </div>
+</div>
 <script>
 (() => {
   const cv = document.getElementById('c');
   const ctx = cv.getContext('2d');
-  function resize(){ cv.width=window.innerWidth; cv.height=window.innerHeight; }
+  function resize(){
+    const lw=document.getElementById('left-hud').offsetWidth;
+    const rw=document.getElementById('right-hud').offsetWidth;
+    cv.width=window.innerWidth-lw-rw; cv.height=window.innerHeight;
+  }
   window.addEventListener('resize',resize); resize();
 
   const TW=64, TH=32;
@@ -795,6 +849,60 @@
     ctx.restore();
   }
 
+  // ── SIDE PANEL DOM UPDATES ────────────────────────────────────────
+  function updateSidePanels(){
+    // Left — upgrades
+    const batEl=document.getElementById('hud-bat');
+    if(upgrades.bat){batEl.textContent='BAT ✓';batEl.style.color='#FF44AA';batEl.className='hud-item on';}
+    else{batEl.textContent=`BAT $${BAT_COST}`;batEl.style.color='';batEl.className='hud-item';}
+
+    const throwEl=document.getElementById('hud-throw');
+    if(player.throwAmmo>0){throwEl.textContent=`THROW ×${player.throwAmmo}`;throwEl.style.color='#E8C840';throwEl.className='hud-item on';}
+    else{throwEl.textContent=`THROW $${THROW_AMMO_COST} [R]`;throwEl.style.color='';throwEl.className='hud-item';}
+
+    const goonEl=document.getElementById('hud-goon');
+    if(goons.length>0){goonEl.textContent=`GOONS ${goons.length}/${MAX_GOONS}`;goonEl.style.color='#FF9933';goonEl.className='hud-item on';}
+    else{goonEl.textContent=`GOON $${GOON_COST}`;goonEl.style.color='';goonEl.className='hud-item';}
+
+    const ownedForts=fortresses.filter(f=>f.purchased&&!f.broken).length;
+    const fortEl=document.getElementById('hud-fort');
+    if(ownedForts>0){fortEl.textContent=`FORTS ${ownedForts}/4`;fortEl.style.color='#AAAAFF';fortEl.className='hud-item on';}
+    else{fortEl.textContent=`FORT $${FORTRESS_COST} [E]`;fortEl.style.color='';fortEl.className='hud-item';}
+
+    const comboEl=document.getElementById('hud-combo');
+    if(combo>=2){comboEl.textContent=`×${Math.min(4,1+~~((combo-1)/2))} COMBO`;comboEl.style.color=`rgb(255,${Math.min(255,150+combo*20)},0)`;}
+    else{comboEl.textContent='';}
+
+    const fcEl=document.getElementById('hud-fort-ctrl');
+    if(playerFortress){const hasTunnel=fortresses.some(f=>f!==playerFortress&&f.purchased&&!f.burning&&!f.broken);
+      fcEl.innerHTML=hasTunnel?'[T] tunnel<br>[E] exit<br>[U] upgrade':'[E] exit<br>[U] upgrade';}
+    else{fcEl.innerHTML='';}
+
+    const coinsEl=document.getElementById('hud-coins');
+    if(coins.length>0){const pulse=0.5+Math.abs(Math.sin(gameTime*3))*0.5;
+      coinsEl.textContent=`COINS: ${coins.length}`;coinsEl.style.opacity=pulse;}
+    else{coinsEl.textContent='';}
+
+    // Right — wanted
+    const starsEl=document.getElementById('hud-stars');
+    starsEl.textContent='★'.repeat(wantedLevel)+'☆'.repeat(5-wantedLevel);
+    starsEl.style.color=wantedLevel>=4?'#FF4444':wantedLevel>=2?'#FFA500':'#FFD700';
+
+    const bountyEl=document.getElementById('hud-bounty');
+    const armedEl=document.getElementById('hud-armed');
+    if(wantedLevel>=3){
+      const bounty=Math.floor(score/10)*10;
+      const flash=wantedLevel>=5?(0.6+Math.sin(gameTime*5)*0.4):0.8;
+      bountyEl.style.opacity=flash;
+      bountyEl.innerHTML=`REWARD<br>$${bounty.toLocaleString()}`;
+      armedEl.style.opacity=flash;
+      armedEl.textContent=wantedLevel>=5?'ARMED & DANGEROUS':'';
+    }else{bountyEl.textContent='';armedEl.textContent='';}
+
+    const dodgeEl=document.getElementById('hud-dodge');
+    dodgeEl.textContent=dodgeCooldown>0?`ROLL ${Math.ceil(dodgeCooldown*10)/10}s`:'';
+  }
+
   // ── RENDER ───────────────────────────────────────────────────────
   function render(){
     ctx.fillStyle='#131b2e';ctx.fillRect(0,0,cv.width,cv.height);
@@ -891,7 +999,7 @@
     if(playerHitFlash>0){ctx.fillStyle=`rgba(220,20,20,${playerHitFlash*0.4})`;ctx.fillRect(0,0,cv.width,cv.height);}
     if(playerFortress){ctx.strokeStyle='rgba(100,140,255,0.45)';ctx.lineWidth=8;ctx.strokeRect(4,4,cv.width-8,cv.height-8);}
 
-    // ── HUD ───────────────────────────────────────────────────────
+    // ── HUD (canvas — title, score, health, money) ────────────────
     ctx.textAlign='center';ctx.font='bold 28px Impact,Arial Black';
     ctx.strokeStyle='rgba(0,0,0,0.85)';ctx.lineWidth=5;ctx.strokeText('TORTILLA SLAP',cv.width/2,36);
     ctx.fillStyle='#FFE040';ctx.fillText('TORTILLA SLAP',cv.width/2,36);
@@ -899,31 +1007,8 @@
     ctx.font='bold 13px "Courier New"';ctx.fillStyle='rgba(255,255,255,0.7)';ctx.fillText(`SCORE  ${score.toLocaleString()}`,16,26);
     ctx.font='19px Arial';ctx.fillStyle='#FF5555';ctx.fillText('♥'.repeat(playerHealth)+'♡'.repeat(3-playerHealth),16,52);
     ctx.font='bold 13px "Courier New"';ctx.fillStyle='#FFD700';ctx.fillText(`$ ${player.money}`,16,72);
-    ctx.font='bold 11px "Courier New"';
-    ctx.fillStyle=upgrades.bat?'#FF44AA':'rgba(255,255,255,0.28)';ctx.fillText(upgrades.bat?'BAT ✓':`BAT $${BAT_COST}`,16,90);
-    ctx.fillStyle=player.throwAmmo>0?'#E8C840':'rgba(255,255,255,0.28)';ctx.fillText(player.throwAmmo>0?`THROW ×${player.throwAmmo}`:`THROW $${THROW_AMMO_COST}[R]`,100,90);
-    ctx.fillStyle=goons.length>0?'#FF9933':'rgba(255,255,255,0.28)';ctx.fillText(goons.length>0?`GOONS ${goons.length}/${MAX_GOONS}`:`GOON $${GOON_COST}`,230,90);
-    const ownedForts=fortresses.filter(f=>f.purchased&&!f.broken).length;
-    ctx.fillStyle=ownedForts>0?'#AAAAFF':'rgba(255,255,255,0.28)';ctx.fillText(ownedForts>0?`FORTS ${ownedForts}/4`:`FORT $${FORTRESS_COST}[E]`,16,104);
-    if(combo>=2){ ctx.fillStyle=`rgba(255,${150+combo*20},0,0.95)`;ctx.font=`bold ${11+combo}px Impact`;ctx.fillText(`×${Math.min(4,1+~~((combo-1)/2))} COMBO`,16,120); }
-    if(playerFortress){ const hasTunnel=fortresses.some(f=>f!==playerFortress&&f.purchased&&!f.burning&&!f.broken);
-      ctx.font='bold 11px "Courier New"';ctx.fillStyle='rgba(100,160,255,0.9)';ctx.fillText(hasTunnel?'T tunnel  E exit  U upgrade':'E exit  U upgrade',16,combo>=2?134:120); }
-    if(coins.length>0){ const pulse=0.5+Math.abs(Math.sin(gameTime*3))*0.5;
-      ctx.font='bold 11px "Courier New"';ctx.fillStyle=`rgba(255,215,0,${pulse})`;ctx.fillText(`COINS WAITING: ${coins.length}`,16,combo>=2?148:134); }
 
-    // Wanted stars + poster
-    ctx.textAlign='right';ctx.font='11px Arial';ctx.fillStyle='rgba(255,255,255,0.55)';ctx.fillText('WANTED',cv.width-14,22);
-    ctx.font='18px Arial';ctx.fillStyle='#FFD700';ctx.fillText('★'.repeat(wantedLevel)+'☆'.repeat(5-wantedLevel),cv.width-12,42);
-    if(wantedLevel>=3){
-      const bounty=Math.floor(score/10)*10;
-      const flash=wantedLevel>=5?(0.6+Math.sin(gameTime*5)*0.4):0.8;
-      ctx.font='bold 10px "Courier New"';ctx.fillStyle=`rgba(255,${wantedLevel>=5?80:180},100,${flash})`;
-      ctx.fillText(`REWARD: $${bounty.toLocaleString()}`,cv.width-12,58);
-      if(wantedLevel>=5){ ctx.font='bold 9px "Courier New"';ctx.fillStyle=`rgba(255,60,60,${flash})`;ctx.fillText('ARMED & DANGEROUS',cv.width-12,72); }
-    }
-    // Dodge cooldown pip
-    if(dodgeCooldown>0){ ctx.textAlign='center';ctx.font='9px Courier';ctx.fillStyle='rgba(136,255,255,0.6)';
-      ctx.fillText(`ROLL ${Math.ceil(dodgeCooldown*10)/10}s`,cv.width/2,cv.height-24); }
+    updateSidePanels();
 
 
     // Ticker
