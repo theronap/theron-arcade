@@ -3,7 +3,16 @@ import {
   WORDS_PER_PIECE, BANANA_CONSUMPTION_INTERVAL, SAVE_INTERVAL,
   MANUAL_CLICKS_PER_PIECE, MANUAL_PIECE_PRICE,
   getProductionTicks, getQualityTier, getLitMultiplier, getShakespeareChance,
+  SHAKESPEARE_WORDS_THRESHOLD, formatExpectedTime, chanceInWindow,
 } from './economy.js';
+
+const WORD_MILESTONES = [
+  { words: SHAKESPEARE_WORDS_THRESHOLD * 0.10, label: '10% of the way to Shakespeare — keep going!' },
+  { words: SHAKESPEARE_WORDS_THRESHOLD * 0.25, label: '25% there — your monkeys are finding their rhythm.' },
+  { words: SHAKESPEARE_WORDS_THRESHOLD * 0.50, label: 'Halfway! 500,000 words typed.' },
+  { words: SHAKESPEARE_WORDS_THRESHOLD * 0.75, label: '75% — the Bard is within reach.' },
+  { words: SHAKESPEARE_WORDS_THRESHOLD,        label: '1,000,000 words! Peak Shakespeare probability unlocked.' },
+];
 // Called by scene when player sells to an NPC. Sells all pending pieces at once.
 export function sellOnePiece() {
   if (!state || state.pendingPieces <= 0 || state.gameWon) return 0;
@@ -22,7 +31,7 @@ export function sellOnePiece() {
 }
 
 import { INITIAL_STATE, saveGame, loadGame, deleteSave } from './state.js';
-import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner, showQualityBanner } from './ui.js';
+import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner, showQualityBanner, showMilestoneBanner } from './ui.js';
 import { initScene } from './scene.js';
 
 // --- State ---
@@ -124,6 +133,16 @@ function tick() {
       showQualityBanner(QUALITY_TIERS[state._lastQualityTier].name, QUALITY_TIERS[currentTier].name);
       state._lastQualityTier = currentTier;
     }
+  }
+
+  // 6. Word milestone detection
+  if (state._lastMilestoneIdx === undefined) {
+    state._lastMilestoneIdx = WORD_MILESTONES.filter(m => state.totalWords >= m.words).length - 1;
+  }
+  const nextMilestone = WORD_MILESTONES[state._lastMilestoneIdx + 1];
+  if (nextMilestone && state.totalWords >= nextMilestone.words) {
+    state._lastMilestoneIdx++;
+    showMilestoneBanner(nextMilestone.label);
   }
 
   updateStats(state);

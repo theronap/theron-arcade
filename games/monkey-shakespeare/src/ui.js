@@ -2,6 +2,7 @@ import {
   QUALITY_TIERS, DISTRIBUTION_TIERS, BANANA_TIERS, UPGRADES,
   formatMoney, formatNumber, getShakespeareChance, getLitMultiplier,
   MANUAL_CLICKS_PER_PIECE, SHAKESPEARE_WORDS_THRESHOLD,
+  formatExpectedTime, chanceInWindow,
 } from './economy.js';
 
 const MAX_FEED_ENTRIES = 12;
@@ -18,6 +19,8 @@ export function updateStats(state) {
   const chance = getShakespeareChance(state.totalWords, state.monkeys, state.educationCapacity, litMult);
   const pct = (chance * 100).toFixed(6);
   setText('stat-shakespeare', `${pct}%`);
+  setText('stat-expected-time', formatExpectedTime(chance));
+  setText('stat-hour-chance', `${(chanceInWindow(chance, 3600) * 100).toFixed(6)}%`);
 
   const wordsProgress = Math.min(100, (state.totalWords / SHAKESPEARE_WORDS_THRESHOLD) * 100);
   setProgress('words-progress', wordsProgress);
@@ -57,16 +60,16 @@ export function renderUpgrades(state) {
 
     const treeUpgrades = UPGRADES.filter(u => u.tree === tree);
     let anyVisible = false;
+    let anyAffordable = false;
 
     for (const upg of treeUpgrades) {
       if (state.purchased.includes(upg.id)) continue;
-
-      // Show if: no prerequisite, or prerequisite is purchased
       const prereqMet = !upg.requires || state.purchased.includes(upg.requires);
       if (!prereqMet) continue;
 
       anyVisible = true;
       const canAfford = state.money >= upg.cost;
+      if (canAfford) anyAffordable = true;
       const btn = document.createElement('button');
       btn.className = `upgrade-btn${canAfford ? '' : ' locked'}`;
       btn.dataset.id = upg.id;
@@ -86,6 +89,16 @@ export function renderUpgrades(state) {
         ? '✓ All upgrades purchased'
         : '— unlock more upgrades to continue —';
       container.appendChild(done);
+    }
+
+    // Badge on the tab button when affordable upgrades are available
+    const tabBtn = document.querySelector(`.tab-btn[data-tree="${tree}"]`);
+    if (tabBtn) {
+      if (anyAffordable) {
+        tabBtn.classList.add('has-affordable');
+      } else {
+        tabBtn.classList.remove('has-affordable');
+      }
     }
   }
 }
@@ -125,6 +138,17 @@ export function showWinScreen(state) {
   setText('win-monkeys', formatNumber(state.monkeys));
   setText('win-money', formatMoney(state.money));
   overlay.hidden = false;
+}
+
+export function showMilestoneBanner(text) {
+  const el = document.getElementById('milestone-banner');
+  if (!el) return;
+  document.getElementById('milestone-text').textContent = text;
+  el.hidden = false;
+  el.classList.remove('quality-banner-fade');
+  void el.offsetWidth;
+  el.classList.add('quality-banner-fade');
+  setTimeout(() => { el.hidden = true; }, 4000);
 }
 
 export function showQualityBanner(oldTierName, newTierName) {

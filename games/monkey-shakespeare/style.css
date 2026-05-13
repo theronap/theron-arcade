@@ -50,6 +50,8 @@ body {
   white-space: nowrap;
 }
 .quality-banner strong { color: var(--amber); font-size: 17px; }
+.milestone-banner { border-color: var(--green); font-size: 13px; }
+.milestone-banner strong { color: var(--green); font-size: 15px; }
 .quality-banner-fade { animation: qualityFade 4s ease forwards; }
 @keyframes qualityFade {
   0%   { opacity: 0; transform: translate(-50%, -55%); }
@@ -111,12 +113,15 @@ header h1 { font-size: 22px; color: var(--amber); letter-spacing: 2px; }
 }
 .meter-row {
   display: flex;
-  justify-content: space-between;
-  font-size: 12px;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
   margin-bottom: 4px;
   color: var(--text-dim);
 }
 .meter-row strong { color: var(--amber); }
+.meter-sep { color: var(--text-muted); }
 
 /* ── Progress tracks ── */
 .progress-track {
@@ -334,6 +339,13 @@ main {
 }
 .tab-btn.active,
 .tab-btn:hover { background: var(--amber-dim); color: var(--bg); border-color: var(--amber-dim); }
+.tab-btn.has-affordable::after {
+  content: '●';
+  font-size: 7px;
+  color: var(--green);
+  vertical-align: super;
+  margin-left: 3px;
+}
 
 /* ── Upgrade buttons ── */
 .upgrade-tree { display: flex; flex-direction: column; gap: 6px; }

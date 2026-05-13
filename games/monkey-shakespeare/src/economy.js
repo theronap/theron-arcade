@@ -162,3 +162,28 @@ export function formatNumber(n) {
   if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   return `${(n / 1_000_000_000).toFixed(2)}B`;
 }
+
+// Tick rate used for time calculations (250ms/tick = 4 ticks/sec)
+export const TICKS_PER_SECOND = 4;
+
+// Expected time until Shakespeare given per-tick probability
+export function formatExpectedTime(chancePerTick) {
+  if (chancePerTick <= 0) return '∞';
+  const seconds = 1 / (chancePerTick * TICKS_PER_SECOND);
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h`;
+  const days = seconds / 86400;
+  if (days < 365.25) return `${Math.round(days)} days`;
+  const years = days / 365.25;
+  if (years < 1e6) return `${formatNumber(Math.round(years))} yrs`;
+  const exp = Math.floor(Math.log10(years));
+  return `~10^${exp} yrs`;
+}
+
+// Probability of at least one success in `seconds` of real time
+export function chanceInWindow(chancePerTick, seconds) {
+  if (chancePerTick <= 0) return 0;
+  if (chancePerTick >= 1) return 1;
+  return 1 - Math.pow(1 - chancePerTick, seconds * TICKS_PER_SECOND);
+}
