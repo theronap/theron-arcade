@@ -441,3 +441,7 @@ main {
 .win-quote      { font-style: italic; color: var(--text); line-height: 1.8; padding: 16px; background: var(--bg); border-radius: var(--radius); border-left: 3px solid var(--amber); text-align: left; margin-bottom: 16px; font-size: 13px; }
 .win-stats      { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; color: var(--text-dim); font-size: 13px; }
 .win-stats strong { color: var(--amber); font-size: 16px; display: block; }
+#win-quote-text { white-space: pre-wrap; }
+.win-blink-cursor { display: inline-block; animation: cursorBlink 0.8s step-end infinite; color: var(--amber); }
+@keyframes cursorBlink { 50% { opacity: 0; } }
+.win-pemberton-quote { margin-top: 12px; font-style: italic; color: var(--amber-dim); font-size: 11px; letter-spacing: 0.5px; }

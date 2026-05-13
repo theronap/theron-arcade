@@ -172,10 +172,9 @@
     <h1>🎭 A Monkey Wrote Shakespeare</h1>
     <p class="win-subtitle">The infinite monkey theorem is proven. Congratulations.</p>
     <div class="win-quote">
-      <em>"To be, or not to be, that is the question:<br>
-      Whether 'tis nobler in the mind to suffer<br>
-      The slings and arrows of outrageous fortune…"</em>
-      <br><br>— Hamlet, Act III, Scene I · typed by your monkey
+      <em id="win-quote-text"></em><span id="win-cursor" class="win-blink-cursor" hidden>▌</span>
+      <div id="win-attribution" hidden><br>— Hamlet, Act III, Scene I · typed by your monkey</div>
+      <div id="win-pemberton" class="win-pemberton-quote" hidden>"My God... they actually did it." — Prof. Pemberton</div>
     </div>
     <div class="win-stats">
       <div><strong id="win-pieces">0</strong> pieces sold</div>
@@ -188,7 +187,7 @@
 </div>
 
 <script type="module">
-  import { init } from '/games/monkey-shakespeare/src/game.js?v=5';
+  import { init } from '/games/monkey-shakespeare/src/game.js?v=6';
   init();
 </script>
 </body>

@@ -4,7 +4,7 @@ import {
   MANUAL_CLICKS_PER_PIECE, MANUAL_PIECE_PRICE,
   getProductionTicks, getQualityTier, getLitMultiplier, getShakespeareChance,
   SHAKESPEARE_WORDS_THRESHOLD, formatExpectedTime, chanceInWindow,
-} from './economy.js?v=5';
+} from './economy.js?v=6';
 
 const WORD_MILESTONES = [
   { words: SHAKESPEARE_WORDS_THRESHOLD * 0.10, label: '10% of the way to Shakespeare — keep going!' },
@@ -35,6 +35,31 @@ const PROFESSOR_DIALOGUES = [
     check: (st) => st.totalWords >= SHAKESPEARE_WORDS_THRESHOLD,
     text: () => `"One million words. The system is primed. Maximum Shakespeare probability is now in effect. Every second, every keystroke — it could happen. The Bard is within statistical reach."`,
   },
+  {
+    id: 'first_building',
+    check: (st) => st.monkeys >= 10,
+    text: (st) => `"Ten monkeys. At this rate — one key per second each — you'd need roughly 10^185,000 years to produce Hamlet by chance. The heat death of the universe is in 10^14 years. I came here to tell you this is futile, but I notice I cannot stop watching."`,
+  },
+  {
+    id: 'edu_classroom_bought',
+    check: (st) => st.purchased.includes('edu_classroom'),
+    text: () => `"A classroom. You're actually teaching them. If we constrain output to real English words — 170,000 in the language — instead of random characters, each keystroke selects a word. Hamlet is roughly 30,000 words. That's 170,000^30,000 combinations. Still 10^150,000. But we've cut the exponent by 35,000 orders. Progress."`,
+  },
+  {
+    id: 'sub_literature_bought',
+    check: (st) => st.purchased.includes('sub_literature'),
+    text: (st) => `"Literature Studies. The monkeys are reading the source material. They're not random anymore — they're approximating it. ${st.monkeys} educated primates studying Shakespeare, then typing Shakespeare. I begin to think this might actually... no. No, I won't say it yet."`,
+  },
+  {
+    id: 'quantum_keyboard',
+    check: (st) => st.purchased.includes('typewriter_quantum'),
+    text: () => `"A quantum keyboard. At this typing speed we're rolling the dice thousands of times per second. The probability is still infinitesimal, but it is no longer zero per human lifetime. I owe you an apology, I think. Don't tell anyone I said that."`,
+  },
+  {
+    id: 'big_publisher',
+    check: (st) => st.distributionTier >= 4,
+    text: () => `"A publisher. You've turned a probability experiment into a business. I came here to study the infinite monkey theorem. Instead I find myself peer-reviewing manuscripts written by chimpanzees. My colleagues will never believe this."`,
+  },
 ];
 
 function checkProfessorDialogues() {
@@ -44,6 +69,7 @@ function checkProfessorDialogues() {
     if (!state.shownDialogues.includes(dlg.id) && dlg.check(state)) {
       state.shownDialogues.push(dlg.id);
       showProfessorDialogue(dlg.text(state));
+      triggerProfApproach();
       return; // one at a time
     }
   }
@@ -66,9 +92,9 @@ export function sellOnePiece() {
   return price * count;
 }
 
-import { INITIAL_STATE, saveGame, loadGame, deleteSave } from './state.js?v=5';
-import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner, showQualityBanner, showMilestoneBanner, showProfessorDialogue } from './ui.js?v=5';
-import { initScene } from './scene.js?v=5';
+import { INITIAL_STATE, saveGame, loadGame, deleteSave } from './state.js?v=6';
+import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner, showQualityBanner, showMilestoneBanner, showProfessorDialogue } from './ui.js?v=6';
+import { initScene, triggerProfApproach } from './scene.js?v=6';
 
 // --- State ---
 

@@ -3,7 +3,7 @@ import {
   formatMoney, formatNumber, getShakespeareChance, getLitMultiplier,
   MANUAL_CLICKS_PER_PIECE, SHAKESPEARE_WORDS_THRESHOLD,
   formatExpectedTime, chanceInWindow,
-} from './economy.js?v=4';
+} from './economy.js?v=6';
 
 const MAX_FEED_ENTRIES = 12;
 
@@ -128,16 +128,40 @@ export function addFeedEntry(qualityName, pricePerPiece, count, isManual = false
   }
 }
 
+const WIN_QUOTE = `"To be, or not to be, that is the question:\nWhether 'tis nobler in the mind to suffer\nThe slings and arrows of outrageous fortune…"`;
+
 export function showWinScreen(state) {
   const overlay = document.getElementById('win-overlay');
   if (!overlay) return;
 
-  const litMult = getLitMultiplier(state.purchased);
   setText('win-pieces', formatNumber(state.totalPieces));
   setText('win-words', formatNumber(state.totalWords));
   setText('win-monkeys', formatNumber(state.monkeys));
   setText('win-money', formatMoney(state.money));
   overlay.hidden = false;
+
+  const quoteEl = document.getElementById('win-quote-text');
+  const cursorEl = document.getElementById('win-cursor');
+  const attrEl = document.getElementById('win-attribution');
+  const pembertonEl = document.getElementById('win-pemberton');
+  if (!quoteEl) return;
+
+  quoteEl.textContent = '';
+  if (cursorEl) cursorEl.hidden = false;
+  if (attrEl) attrEl.hidden = true;
+  if (pembertonEl) pembertonEl.hidden = true;
+
+  let idx = 0;
+  const timer = setInterval(() => {
+    quoteEl.textContent = WIN_QUOTE.slice(0, idx + 1);
+    idx++;
+    if (idx >= WIN_QUOTE.length) {
+      clearInterval(timer);
+      if (cursorEl) cursorEl.hidden = true;
+      if (attrEl) attrEl.hidden = false;
+      if (pembertonEl) setTimeout(() => { pembertonEl.hidden = false; }, 1200);
+    }
+  }, 40);
 }
 
 export function showMilestoneBanner(text) {

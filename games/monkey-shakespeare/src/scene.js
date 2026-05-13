@@ -31,13 +31,28 @@ const VHEAD  = '#d89058';                        // vendor head
 const PROFB  = ['#5a6878','#3a4858','#283040']; // professor suit
 const PROFH  = '#e8c8a0';                        // professor head
 
-const NPC_PALETTES = [
-  [['#c03030','#8a1a1a','#6a1010'], '#e87070'],
-  [['#30a030','#1a6a1a','#0e4a0e'], '#70e870'],
-  [['#9030c0','#5a1a8a','#3a106a'], '#c870e8'],
-  [['#c08030','#8a5010','#6a3800'], '#e8b870'],
-  [['#30a0b0','#1a6a78','#0e4a55'], '#70d8e8'],
-  [['#b03080','#7a1a50','#5a0e38'], '#e870b8'],
+// Buyer appearance tiers keyed to distribution channel (0–7)
+const BUYER_TIERS = [
+  { scale: 0.82, palettes: [
+    [['#c03030','#8a1a1a','#6a1010'], '#e87070'],
+    [['#30a030','#1a6a1a','#0e4a0e'], '#70e870'],
+    [['#c08030','#8a5010','#6a3800'], '#e8b870'],
+  ]},
+  { scale: 0.87, palettes: [
+    [['#9030c0','#5a1a8a','#3a106a'], '#c870e8'],
+    [['#30a0b0','#1a6a78','#0e4a55'], '#70d8e8'],
+    [['#b03080','#7a1a50','#5a0e38'], '#e870b8'],
+  ]},
+  { scale: 0.93, palettes: [
+    [['#3050a0','#1a3070','#0e1e50'], '#70a0e8'],
+    [['#507830','#305018','#1e3008'], '#a0c870'],
+    [['#703838','#4a1a1a','#300e0e'], '#c07878'],
+  ]},
+  { scale: 1.02, palettes: [
+    [['#202020','#101010','#080808'], '#d0c090'],
+    [['#1a2040','#0e1428','#080c18'], '#c8b880'],
+    [['#401a20','#280e10','#180808'], '#d0a090'],
+  ]},
 ];
 
 let canvas, ctx, originX = 0, originY = 0, animT = 0, lastT = 0;
@@ -52,6 +67,14 @@ let npcSpawnTimer = 0;
 
 // Floating text pool
 const floats = []; // { x, y, z, text, life, maxLife, color }
+
+// Professor NPC
+const prof = { x: 9.8, y: 3.5, visible: false, approaching: false, returnTimer: 0 };
+
+export function triggerProfApproach() {
+  prof.approaching = true;
+  prof.returnTimer = 0;
+}
 
 export function initScene(getState, onSell) {
   _gs = getState;
@@ -215,8 +238,6 @@ function drawClassroom(x, y) {
   ibox(x + 0.82, y - 0.05, 0,   0.48, 0.07, 0.65, TRUNK);
   // Chalkboard visible on left face
   ibox(x + 0.35, y + d - 0.07, 0.30, 1.20, 0.08, 0.58, CBOARD);
-  // Professor outside the door
-  drawCharacter(x + 1.20, y + d + 0.10, PROFB, PROFH, false, 0.80);
 }
 
 function drawMonkeyBuilding(x, y, floors, occupiedSlots) {
@@ -236,9 +257,10 @@ function drawMonkeyBuilding(x, y, floors, occupiedSlots) {
 
 // ── NPC helpers ───────────────────────────────────────────
 
-function spawnNpc() {
+function spawnNpc(distTier = 0) {
   const fromLeft = Math.random() < 0.5;
-  const pal = NPC_PALETTES[Math.floor(Math.random() * NPC_PALETTES.length)];
+  const group = distTier >= 6 ? BUYER_TIERS[3] : distTier >= 4 ? BUYER_TIERS[2] : distTier >= 2 ? BUYER_TIERS[1] : BUYER_TIERS[0];
+  const pal = group.palettes[Math.floor(Math.random() * group.palettes.length)];
   const npc = {
     x:  fromLeft ? -1.2 : GRID + 0.2,
     y:  1.5 + Math.random() * (GRID - 3),
@@ -247,6 +269,7 @@ function spawnNpc() {
     spd: 1.0 + Math.random() * 0.5,
     bodyC: pal[0],
     headC: pal[1],
+    scale: group.scale,
     state: 'walking',
     soldTimer: 0,
     saleAmount: 0,
@@ -262,6 +285,7 @@ function updateScene(dt) {
 
   updatePlayer(dt, st);
   updateNpcs(dt, st);
+  updateProf(dt, st);
   updateFloats(dt);
 }
 
@@ -309,7 +333,7 @@ function updateNpcs(dt, st) {
     const walkingCount = npcs.filter(n => n.state === 'walking').length;
     if (npcSpawnTimer <= 0 && walkingCount < Math.min(st.pendingPieces, 4)) {
       npcSpawnTimer = 2.5 + Math.random() * 2;
-      spawnNpc();
+      spawnNpc(st.distributionTier ?? 0);
     }
   }
 
@@ -361,6 +385,37 @@ function updateNpcs(dt, st) {
           });
         }
       }
+    }
+  }
+}
+
+function updateProf(dt, st) {
+  const eduCap = st?.educationCapacity ?? 0;
+  prof.visible = eduCap > 0;
+  if (!prof.visible) return;
+
+  if (prof.approaching) {
+    const targetX = pl.x + 0.8, targetY = pl.y;
+    const dx = targetX - prof.x, dy = targetY - prof.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 1.0) {
+      const step = Math.min(1.8 * dt, dist);
+      prof.x += (dx / dist) * step;
+      prof.y += (dy / dist) * step;
+    } else {
+      prof.approaching = false;
+      prof.returnTimer = 10;
+    }
+  } else if (prof.returnTimer > 0) {
+    prof.returnTimer -= dt;
+  } else {
+    const homeX = 9.8, homeY = 3.5;
+    const dx = homeX - prof.x, dy = homeY - prof.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 0.1) {
+      const step = Math.min(1.0 * dt, dist);
+      prof.x += (dx / dist) * step;
+      prof.y += (dy / dist) * step;
     }
   }
 }
@@ -459,18 +514,18 @@ function drawScene() {
     if (sum === 11 && eduCap > 0) drawClassroom(9.2, 1.5);
   }
 
-  // Walking NPCs (drawn after ground)
-  // Sort NPCs by x+y for painter's order
-  const sortedNpcs = [...npcs].sort((a, b) => (a.x + a.y) - (b.x + b.y));
-  for (const n of sortedNpcs) {
-    const pal = n.bodyC;
+  // Walking NPCs + professor — sorted by x+y for painter's order
+  const sortedChars = [...npcs];
+  if (prof.visible) sortedChars.push({ x: prof.x, y: prof.y, bodyC: PROFB, headC: PROFH, scale: 0.80, state: 'walking', isProfessor: true });
+  sortedChars.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+  for (const n of sortedChars) {
+    const scale = n.scale ?? 0.85;
     const bounce = n.state === 'sold' ? Math.abs(Math.sin(animT * 12)) * .12 : 0;
-    drawCharacter(n.x, n.y, pal, n.headC, false, 0.85);
+    drawCharacter(n.x, n.y, n.bodyC, n.headC, false, scale);
     if (n.state === 'sold' && bounce > 0) {
-      // Extra bounce for sold NPCs
-      const hp = iso(n.x + .5, n.y + .5, .72 * .85 + .22 * .85 + bounce);
+      const hp = iso(n.x + .5, n.y + .5, .72 * scale + .22 * scale + bounce);
       ctx.beginPath();
-      ctx.arc(hp.x, hp.y, 9.5 * .85, 0, Math.PI * 2);
+      ctx.arc(hp.x, hp.y, 9.5 * scale, 0, Math.PI * 2);
       ctx.fillStyle = n.headC;
       ctx.fill();
     }
