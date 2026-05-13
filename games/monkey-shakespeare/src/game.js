@@ -1,0 +1,223 @@
+import {
+  UPGRADES, QUALITY_TIERS, DISTRIBUTION_TIERS, BANANA_TIERS,
+  WORDS_PER_PIECE, BANANA_CONSUMPTION_INTERVAL, SAVE_INTERVAL,
+  MANUAL_CLICKS_PER_PIECE, MANUAL_PIECE_PRICE,
+  getProductionTicks, getQualityTier, getLitMultiplier, getShakespeareChance,
+} from './economy.js';
+
+import { INITIAL_STATE, saveGame, loadGame, deleteSave } from './state.js';
+import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner } from './ui.js';
+import { initScene } from './scene.js';
+
+// --- State ---
+
+let state = null;
+
+function initState() {
+  const moneyBefore = 0;
+  const saved = loadGame();
+
+  if (saved) {
+    const secondsAway = Math.min(
+      (Date.now() - (saved.lastSave ?? Date.now())) / 1000,
+      8 * 3600,
+    );
+    state = saved;
+    if (state.gameWon) {
+      showWinScreen(state);
+      return;
+    }
+    if (secondsAway > 60 && state.monkeys > 0) {
+      showOfflineBanner(secondsAway, Math.max(0, state.money - moneyBefore));
+    }
+  } else {
+    state = { ...INITIAL_STATE, lastSave: Date.now() };
+  }
+}
+
+// --- Game loop (1 tick = 1 second) ---
+
+const SAVE_INTERVAL_TICKS = 10;
+
+function tick() {
+  if (state.gameWon) return;
+
+  // 1. Banana consumption every 10 ticks
+  if (state.monkeys > 0) {
+    state.bananaTick++;
+    if (state.bananaTick >= BANANA_CONSUMPTION_INTERVAL) {
+      state.bananaTick = 0;
+      const tier = BANANA_TIERS[state.bananaTier];
+      if (tier?.infinite) {
+        state.monkeysStalled = false;
+      } else if (state.bananas >= state.monkeys) {
+        state.bananas -= state.monkeys;
+        state.monkeysStalled = false;
+      } else {
+        state.bananas = 0;
+        state.monkeysStalled = true;
+      }
+    }
+
+    // Auto banana buy
+    if (state.bananaTier > 0) {
+      const tier = BANANA_TIERS[state.bananaTier];
+      if (tier && !tier.infinite && tier.tickInterval) {
+        state.bananaAutoTick++;
+        if (state.bananaAutoTick >= tier.tickInterval) {
+          state.bananaAutoTick = 0;
+          state.bananas += tier.amount;
+        }
+      }
+    }
+  }
+
+  // 2. Monkey production
+  if (state.monkeys > 0 && !state.monkeysStalled) {
+    state.productionProgress++;
+    const prodTicks = getProductionTicks(state.speedMultiplier);
+    if (state.productionProgress >= prodTicks) {
+      state.productionProgress = 0;
+      completePieces(state.monkeys, false);
+    }
+  }
+
+  // 3. Shakespeare roll (once per second)
+  const litMult = getLitMultiplier(state.purchased);
+  const chance = getShakespeareChance(state.totalWords, state.monkeys, state.educationCapacity, litMult);
+  if (chance > 0 && Math.random() < chance) {
+    state.gameWon = true;
+    triggerShakespeare();
+    saveGame(state);
+    return;
+  }
+
+  // 4. Auto-save every 10 ticks
+  state.saveTick++;
+  if (state.saveTick >= SAVE_INTERVAL_TICKS) {
+    state.saveTick = 0;
+    saveGame(state);
+  }
+
+  updateStats(state);
+  renderUpgrades(state);
+}
+
+function completePieces(count, isManual) {
+  const edRatio = state.monkeys > 0
+    ? Math.min(state.educationCapacity, state.monkeys) / state.monkeys
+    : 0;
+  const qualityIndex = isManual ? 3 : getQualityTier(edRatio); // manual = Simple Paragraph (index 3)
+  const quality = QUALITY_TIERS[qualityIndex];
+  const distMult = DISTRIBUTION_TIERS[state.distributionTier].multiplier;
+  const pricePerPiece = (isManual ? MANUAL_PIECE_PRICE : quality.basePrice) * distMult;
+
+  state.money += pricePerPiece * count;
+  state.totalWords += count * WORDS_PER_PIECE;
+  state.totalPieces += count;
+
+  addFeedEntry(isManual ? 'Simple Paragraph' : quality.name, pricePerPiece, count, isManual);
+}
+
+// --- Win ---
+
+function triggerShakespeare() {
+  showWinScreen(state);
+}
+
+// --- Player actions ---
+
+export function manualType() {
+  if (state.gameWon) return;
+  state.manualProgress++;
+  if (state.manualProgress >= MANUAL_CLICKS_PER_PIECE) {
+    state.manualProgress = 0;
+    completePieces(1, true);
+  }
+  updateStats(state);
+  renderUpgrades(state);
+}
+
+export function manualBuyBananas() {
+  const cost = 0.50;
+  const amount = 50;
+  if (state.money < cost) return;
+  state.money -= cost;
+  state.bananas += amount;
+  if (state.monkeysStalled && state.bananas >= state.monkeys) {
+    state.monkeysStalled = false;
+  }
+  updateStats(state);
+}
+
+export function purchaseUpgrade(id) {
+  const upg = UPGRADES.find(u => u.id === id);
+  if (!upg) return;
+  if (state.purchased.includes(id)) return;
+  if (upg.requires && !state.purchased.includes(upg.requires)) return;
+  if (state.money < upg.cost) return;
+
+  state.money -= upg.cost;
+  state.purchased.push(id);
+
+  const eff = upg.effect;
+  if (eff.addMonkeys)        state.monkeys += eff.addMonkeys;
+  if (eff.speedMultiplier)   state.speedMultiplier = eff.speedMultiplier;
+  if (eff.educationCapacity) state.educationCapacity = Math.max(state.educationCapacity, eff.educationCapacity);
+  if (eff.bananaTier != null)       state.bananaTier = eff.bananaTier;
+  if (eff.distributionTier != null) state.distributionTier = eff.distributionTier;
+  // litBonus upgrades are computed dynamically via getLitMultiplier()
+
+  updateStats(state);
+  renderUpgrades(state);
+}
+
+export function resetGame() {
+  deleteSave();
+  state = { ...INITIAL_STATE, lastSave: Date.now() };
+  const feed = document.getElementById('output-feed');
+  if (feed) feed.innerHTML = '';
+  const win = document.getElementById('win-overlay');
+  if (win) win.hidden = true;
+  updateStats(state);
+  renderUpgrades(state);
+}
+
+// --- Boot ---
+
+export function init() {
+  initState();
+  updateStats(state);
+  renderUpgrades(state);
+
+  // Upgrade click delegation
+  document.getElementById('upgrade-panel')?.addEventListener('click', e => {
+    const btn = e.target.closest('.upgrade-btn');
+    if (btn?.dataset.id) purchaseUpgrade(btn.dataset.id);
+  });
+
+  document.getElementById('type-btn')?.addEventListener('click', manualType);
+  document.getElementById('buy-bananas-btn')?.addEventListener('click', manualBuyBananas);
+  document.getElementById('reset-btn')?.addEventListener('click', () => {
+    if (confirm('Reset all progress?')) resetGame();
+  });
+
+  document.getElementById('win-reset-btn')?.addEventListener('click', () => {
+    if (confirm('Start a new game?')) resetGame();
+  });
+
+  // Tab switching
+  document.getElementById('upgrade-panel')?.addEventListener('click', e => {
+    const tab = e.target.closest('.tab-btn');
+    if (!tab) return;
+    const tree = tab.dataset.tree;
+    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.upgrade-tree').forEach(t => t.hidden = true);
+    tab.classList.add('active');
+    const treeEl = document.getElementById(`upgrades-${tree}`);
+    if (treeEl) treeEl.hidden = false;
+  });
+
+  setInterval(tick, 1000);
+  initScene(() => state);
+}

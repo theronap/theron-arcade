@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monkey Shakespeare</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Save warning (hidden by default) -->
+<div id="save-warning" class="banner warning" hidden>
+  ⚠ Save failed — localStorage may be full. Progress is not being saved.
+</div>
+
+<!-- Offline progress banner -->
+<div id="offline-banner" class="banner info" hidden>
+  Welcome back! Your monkeys typed for <strong id="offline-time">?</strong> while you were away.
+  Earned: <strong id="offline-earned">?</strong>
+  <button onclick="this.parentElement.hidden=true">✕</button>
+</div>
+
+<!-- Stall warning -->
+<div id="stall-warning" class="banner error" hidden>
+  🍌 Monkeys are out of bananas and have stopped typing! Buy more bananas.
+</div>
+
+<!-- Header -->
+<header>
+  <h1>🐒 Monkey Shakespeare</h1>
+  <p class="subtitle">Can an infinite number of monkeys produce infinite literature?</p>
+</header>
+
+<!-- Stats bar -->
+<div id="stats-bar">
+  <div class="stat">
+    <span class="stat-label">Money</span>
+    <span class="stat-value" id="stat-money">$0.00</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Bananas 🍌</span>
+    <span class="stat-value" id="stat-bananas">20</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Monkeys</span>
+    <span class="stat-value" id="stat-monkeys">0</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Words Typed</span>
+    <span class="stat-value" id="stat-words">0</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Pieces Sold</span>
+    <span class="stat-value" id="stat-pieces">0</span>
+  </div>
+</div>
+
+<!-- Shakespeare meter -->
+<div id="shakespeare-meter">
+  <div class="meter-row">
+    <span>Shakespeare Probability:</span>
+    <strong id="stat-shakespeare">0.000000%</strong>
+  </div>
+  <div class="progress-track">
+    <div class="progress-fill amber" id="words-progress"></div>
+  </div>
+  <div class="meter-labels">
+    <span>Words gate: 0 / 1M</span>
+    <span id="words-gate-label"></span>
+  </div>
+</div>
+
+<!-- Main layout -->
+<main>
+
+  <!-- Left: typewriter + feed -->
+  <section id="left-panel">
+
+    <!-- Isometric game scene -->
+    <canvas id="game-scene"></canvas>
+
+
+    <!-- Manual typing -->
+    <div class="card" id="typewriter-card">
+      <h2>Your Typewriter</h2>
+      <p class="card-meta">Simple Paragraph quality · <span id="manual-price">$1.00</span> / piece</p>
+      <div class="progress-track">
+        <div class="progress-fill green" id="manual-progress-bar"></div>
+      </div>
+      <p class="progress-label"><span id="manual-progress-text">Click to type</span></p>
+      <button id="type-btn" class="big-btn">⌨ TYPE</button>
+    </div>
+
+    <!-- Monkey production -->
+    <div class="card" id="production-card">
+      <h2>Monkey Production</h2>
+      <div class="monkey-stats">
+        <span>Output quality: <strong id="monkey-quality">—</strong></span>
+        <span>Selling via: <strong id="dist-name">Street Corner</strong></span>
+        <span>Price: <strong id="monkey-price">—</strong></span>
+        <span>Banana supply: <strong id="banana-tier-name">Manual</strong></span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill amber" id="production-progress"></div>
+      </div>
+      <p class="progress-label">Production cycle progress</p>
+    </div>
+
+    <!-- Banana manual buy -->
+    <div class="card" id="banana-card">
+      <h2>Bananas 🍌</h2>
+      <p class="card-meta">50 bananas for $0.50 · Each monkey eats 1 banana every 10 seconds</p>
+      <button id="buy-bananas-btn" class="action-btn">Buy 50 Bananas ($0.50)</button>
+    </div>
+
+    <!-- Output feed -->
+    <div class="card" id="feed-card">
+      <h2>Output Feed</h2>
+      <div id="output-feed">
+        <div class="feed-empty">Start typing to produce your first piece...</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- Right: upgrades -->
+  <section id="right-panel">
+    <div id="upgrade-panel">
+      <h2>Upgrades</h2>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab-btn active" data-tree="production">Production</button>
+        <button class="tab-btn" data-tree="education">Education</button>
+        <button class="tab-btn" data-tree="banana">Bananas</button>
+        <button class="tab-btn" data-tree="distribution">Distribution</button>
+      </div>
+
+      <div id="upgrades-production" class="upgrade-tree"></div>
+      <div id="upgrades-education"  class="upgrade-tree" hidden></div>
+      <div id="upgrades-banana"     class="upgrade-tree" hidden></div>
+      <div id="upgrades-distribution" class="upgrade-tree" hidden></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Footer controls -->
+<footer>
+  <button id="reset-btn" class="danger-btn">↺ New Game</button>
+</footer>
+
+<!-- Win overlay -->
+<div id="win-overlay" class="overlay" hidden>
+  <div class="win-box">
+    <h1>🎭 A Monkey Wrote Shakespeare</h1>
+    <p class="win-subtitle">The infinite monkey theorem is proven. Congratulations.</p>
+    <div class="win-quote">
+      <em>"To be, or not to be, that is the question:<br>
+      Whether 'tis nobler in the mind to suffer<br>
+      The slings and arrows of outrageous fortune…"</em>
+      <br><br>— Hamlet, Act III, Scene I · typed by your monkey
+    </div>
+    <div class="win-stats">
+      <div><strong id="win-pieces">0</strong> pieces sold</div>
+      <div><strong id="win-words">0</strong> words typed</div>
+      <div><strong id="win-monkeys">0</strong> monkeys employed</div>
+      <div><strong id="win-money">$0</strong> total earned</div>
+    </div>
+    <button id="win-reset-btn" class="big-btn">Play Again</button>
+  </div>
+</div>
+
+<script type="module">
+  import { init } from './src/game.js';
+  init();
+</script>
+</body>
+</html>
