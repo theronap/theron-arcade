@@ -406,9 +406,8 @@
     if(n.bribeLevel>0) return;
     if(n.isKid) return;
     if(!byGoon&&!n.firstSlapped){
-      n.firstSlapped=true;
-      coins.push({x:n.x+0.05+Math.random()*0.3,y:n.y+0.10+Math.random()*0.25,t:25.0});
-      coins.push({x:n.x+0.35+Math.random()*0.3,y:n.y+0.15+Math.random()*0.25,t:25.0});
+      n.firstSlapped=true; player.money+=2;
+      slapFX.push({x:n.x+0.4,y:n.y-0.1,z:2.2,t:0.9,text:'+$2',col:'#FFD700'});
     }
     n.health--; n.hitFlash=0.25; n.hasTortilla=false;
     // Gang alert
