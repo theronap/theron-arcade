@@ -35,11 +35,97 @@
     poly([p(x+w,y,z),p(x+w,y+d,z),p(x+w,y+d,z+h),p(x+w,y,z+h)], tint(col,0.50));
   }
   function tile(gx,gy,col){ poly([p(gx,gy),p(gx+1,gy),p(gx+1,gy+1),p(gx,gy+1)],col,'rgba(0,0,0,0.05)'); }
+  const VROAD_SP=14; // vertical road spacing in tiles
+  const CAR_COLS=['#334455','#553344','#445533','#665533','#334466','#554422'];
+  function isHRoad(gy){ const b=((gy%8)+8)%8; return b===3||b===4; }
+  function isVRoad(gx){ const b=((gx%VROAD_SP)+VROAD_SP)%VROAD_SP; return b===3||b===4; }
+  function isHWalk(gy){ const b=((gy%8)+8)%8; return b===2||b===5; }
+  function isVWalk(gx){ const b=((gx%VROAD_SP)+VROAD_SP)%VROAD_SP; return b===2||b===5; }
+  // snap world coord to nearest H-road centerline
+  function snapHY(y){ return Math.round((y-3.5)/8)*8+3.5; }
+  // snap world coord to nearest V-road centerline
+  function snapVX(x){ return Math.round((x-3.5)/VROAD_SP)*VROAD_SP+3.5; }
+
   function tileColor(gx,gy){
-    const b=((gy%8)+8)%8;
-    if(b===3||b===4) return gx%2===0?'#28283a':'#222232';
-    if(b===2||b===5) return gx%2===0?'#787888':'#6a6a78';
+    if(isHRoad(gy)||isVRoad(gx)) return (gx+gy)%2===0?'#28283a':'#222232';
+    if(isHWalk(gy)||isVWalk(gx)) return gx%2===0?'#787888':'#6a6a78';
     return (gx+gy)%2===0?'#2e5030':'#263e28';
+  }
+
+  // ── TRAFFIC ──────────────────────────────────────────────────────
+  const trafficCars=[];
+  function makePath(ox,oy){
+    const dH=Math.abs(oy-snapHY(oy)), dV=Math.abs(ox-snapVX(ox));
+    let x,y,onH;
+    if(dH<=dV){y=snapHY(oy);x=ox;onH=true;}else{x=snapVX(ox);y=oy;onH=false;}
+    const pts=[{x,y}];
+    for(let i=0;i<7;i++){
+      if(onH){
+        const dir=Math.random()<0.5?1:-1;
+        const steps=1+~~(Math.random()*2);
+        x=snapVX(x+dir*VROAD_SP*steps);
+      }else{
+        const dir=Math.random()<0.5?1:-1;
+        const steps=1+~~(Math.random()*2);
+        y=snapHY(y+dir*8*steps);
+      }
+      pts.push({x,y});
+      if(Math.random()<0.65) onH=!onH;
+    }
+    return pts;
+  }
+  function makeCar(ox,oy){
+    const col=CAR_COLS[~~(Math.random()*CAR_COLS.length)];
+    const path=makePath(ox,oy);
+    return {x:path[0].x,y:path[0].y,w:1.4,d:0.7,speed:4+Math.random()*2.5,col,path,pidx:1};
+  }
+  function initTraffic(){
+    trafficCars.length=0;
+    for(let i=0;i<3;i++){
+      const ang=(i/3)*Math.PI*2;
+      trafficCars.push(makeCar(player.x+Math.cos(ang)*12,player.y+Math.sin(ang)*12));
+    }
+  }
+  function updateTraffic(dt){
+    trafficCars.forEach(car=>{
+      if(car.pidx>=car.path.length){
+        if(Math.abs(car.x-player.x)>35||Math.abs(car.y-player.y)>35){
+          const c=makeCar(player.x+(Math.random()-.5)*22,player.y+(Math.random()-.5)*22);
+          Object.assign(car,c);
+        }else{car.path=makePath(car.x,car.y);car.pidx=1;}
+        return;
+      }
+      const tgt=car.path[car.pidx];
+      const dx=tgt.x-car.x,dy=tgt.y-car.y,d=Math.sqrt(dx*dx+dy*dy);
+      if(d<car.speed*dt+0.06){car.x=tgt.x;car.y=tgt.y;car.pidx++;}
+      else{car.x+=dx/d*car.speed*dt;car.y+=dy/d*car.speed*dt;}
+      if(!playerFortress&&playerInvincible<=0){
+        const pdx=player.x+0.44-(car.x+car.w*0.5),pdy=player.y+0.35-(car.y+car.d*0.5);
+        if(Math.abs(pdx)<car.w*0.5+0.2&&Math.abs(pdy)<car.d*0.5+0.2){
+          playerHealth=Math.max(0,playerHealth-1);playerHitFlash=0.9;playerInvincible=2.5;
+          combo=0;comboTimer=0;
+          slapFX.push({x:player.x,y:player.y-0.2,z:2.0,t:1.0,text:'HONK!!',col:'#FFDD00'});
+          if(playerHealth<=0) gameOver=true;
+        }
+      }
+    });
+  }
+  function drawTrafficCar(car){
+    const{x,y,col,path,pidx}=car;
+    box(x,y,0,1.4,0.7,0.44,col);
+    box(x+0.22,y+0.08,0.44,0.96,0.54,0.26,tint(col,0.80));
+    box(x+0.24,y+0.64,0.48,0.92,0.04,0.18,'#88bbdd');
+    box(x+0.24,y+0.04,0.48,0.04,0.58,0.18,'#88bbdd');
+    if(pidx<path.length){
+      const t=path[pidx],hdx=t.x-x,hdy=t.y-y;
+      if(Math.abs(hdx)>Math.abs(hdy)){
+        const lx=hdx>0?x+1.36:x-0.04;
+        box(lx,y+0.10,0.38,0.05,0.12,0.10,'#FFFFAA');box(lx,y+0.48,0.38,0.05,0.12,0.10,'#FFFFAA');
+      }else{
+        const ly=hdy>0?y+0.62:y-0.04;
+        box(x+0.10,ly,0.38,0.12,0.05,0.10,'#FFFFAA');box(x+0.48,ly,0.38,0.12,0.05,0.10,'#FFFFAA');
+      }
+    }
   }
 
   // ── PALETTES ─────────────────────────────────────────────────────
@@ -287,7 +373,7 @@
   function initObs(){ obstacles.length=0; for(let i=0;i<14;i++){ const ob=spawnOb(0,0); if(ob) obstacles.push(ob); } }
   function resetOwners(){ OWNERS.forEach((ow,i)=>{ ow.x=STANDS[i].x+1.82;ow.y=STANDS[i].y+0.28;ow.hitFlash=0;ow.slapAnim=0;ow.cowSlaps=0;ow.cowed=false;ow.coinTimer=0; }); }
   function resetFortresses(){ fortresses=FORT_DEFS.map(makeFortress); playerFortress=null; }
-  initNPCs(); initObs();
+  initNPCs(); initObs(); initTraffic();
 
   // ── SLAP LOGIC ───────────────────────────────────────────────────
   function slapNPC(n,byGoon=false,byBat=false){
@@ -440,14 +526,14 @@
       }
       if(n.state==='bribed_goon'){
         let nearEnemy=null,nearD=Infinity;
-        NPCs.forEach(m=>{ if(m===n||m.bribeLevel>0||m.state==='stunned') return;
+        NPCs.forEach(m=>{ if(m===n||m.bribeLevel>0||m.state==='stunned'||!m.hasTortilla) return;
           const d=Math.sqrt((m.x-n.x)**2+(m.y-n.y)**2); if(d<6&&d<nearD){nearEnemy=m;nearD=d;} });
         if(nearEnemy){
           const dx=nearEnemy.x-n.x,dy=nearEnemy.y-n.y,d=Math.sqrt(dx*dx+dy*dy);
           if(d>1.6){ n.x+=dx/d*n.speed*dt;n.y+=dy/d*n.speed*dt;
             n.walkTimer+=dt;if(n.walkTimer>0.16){n.walkTimer=0;n.walkCycle=1-n.walkCycle;} }
           else if(n.throwCooldown<=0){ n.throwCooldown=1.8;n.slapAnim=0.35;
-            if(d>1.0){ projectiles.push({x:n.x+0.84,y:n.y+0.08,z:1.46,target:nearEnemy,speed:9,age:0,initD:d,byBat:false}); }
+            if(d>1.0){ projectiles.push({x:n.x+0.84,y:n.y+0.08,z:1.46,target:nearEnemy,speed:9,age:0,initD:d,byBat:false,firedBy:n}); }
             else { slapNPC(nearEnemy,true); } }
         } else {
           const dx=player.x-n.x,dy=player.y-n.y,d=Math.sqrt(dx*dx+dy*dy);
@@ -466,11 +552,11 @@
           n.walkTimer+=dt;if(n.walkTimer>0.18){n.walkTimer=0;n.walkCycle=1-n.walkCycle;} }
         if(n.throwCooldown<=0){
           let tt=null,throwD=7;
-          NPCs.forEach(m=>{ if(m===n||m.bribeLevel>0||m.state==='stunned') return;
+          NPCs.forEach(m=>{ if(m===n||m.bribeLevel>0||m.state==='stunned'||!m.hasTortilla) return;
             const md=Math.sqrt((m.x-fcx)**2+(m.y-fcy)**2); if(md<throwD){throwD=md;tt=m;} });
           if(tt){ n.throwCooldown=2.2;n.slapAnim=0.35;
             const initD=Math.sqrt((tt.x-n.x)**2+(tt.y-n.y)**2);
-            projectiles.push({x:n.x+0.84,y:n.y+0.08,z:1.46,target:tt,speed:9,age:0,initD,byBat:false}); }
+            projectiles.push({x:n.x+0.84,y:n.y+0.08,z:1.46,target:tt,speed:9,age:0,initD,byBat:false,firedBy:n}); }
         } continue;
       }
       if(n.state==='alarmed'){
@@ -571,7 +657,13 @@
       const tx=proj.target.x+0.44,ty=proj.target.y+0.35;
       const dx=tx-proj.x,dy=ty-proj.y,d=Math.sqrt(dx*dx+dy*dy);
       if(d<0.9||proj.age>2.5){
-        if(d<0.9&&proj.target.state!=='stunned'&&proj.target.bribeLevel===0) slapNPC(proj.target,true,proj.byBat);
+        if(d<0.9&&proj.target.state!=='stunned'&&proj.target.bribeLevel===0){
+          if(proj.firedBy&&proj.firedBy.bribeLevel>0&&proj.target.isPolice&&player.money>=BRIBE_COSTS[0]){
+            player.money-=BRIBE_COSTS[0];proj.target.bribeLevel=1;proj.target.state='bribed';
+            proj.target.speed=0.9;proj.target.hasTortilla=false;
+            slapFX.push({x:proj.target.x,y:proj.target.y-0.5,z:2.2,t:1.8,text:'BRIBED!',col:'#AAFFAA'});
+          }else{slapNPC(proj.target,true,proj.byBat);}
+        }
         projectiles.splice(i,1);
       } else {
         proj.x+=dx/d*proj.speed*dt;proj.y+=dy/d*proj.speed*dt;
@@ -693,7 +785,7 @@
     combo=0;comboTimer=0;dodgeTimer=0;dodgeCooldown=0;
     slapFX.length=0;coins.length=0;projectiles.length=0;goons.length=0;upgrades.bat=false;
     ticker.text='';ticker.x=0;ticker.queued=[];
-    resetFortresses();initNPCs();initObs();resetOwners();
+    resetFortresses();initNPCs();initObs();initTraffic();resetOwners();
   }
 
   // ── DRAW FUNCTIONS ───────────────────────────────────────────────
@@ -804,7 +896,11 @@
     for(let gx=px-R;gx<=px+R;gx++) for(let gy=py-R;gy<=py+R;gy++) tiles.push([gx,gy]);
     tiles.sort(([ax,ay],[bx,by])=>(ax+ay)-(bx+by));
     tiles.forEach(([gx,gy])=>{ tile(gx,gy,tileColor(gx,gy));
-      if(((gy%8)+8)%8===3&&gx%2===0) box(gx+0.35,gy+0.88,0.01,0.28,0.07,0.02,'#d0d0c4'); });
+      // H-road centre stripe (skip V-road intersection)
+      if(((gy%8)+8)%8===3&&gx%2===0&&!isVRoad(gx)) box(gx+0.35,gy+0.88,0.01,0.28,0.07,0.02,'#d0d0c4');
+      // V-road centre stripe (skip H-road intersection)
+      if(((gx%VROAD_SP)+VROAD_SP)%VROAD_SP===3&&gy%2===0&&!isHRoad(gy)) box(gx+0.88,gy+0.35,0.01,0.07,0.28,0.02,'#d0d0c4');
+    });
 
     const sh=p(player.x+0.44,player.y+0.44,0);
     ctx.fillStyle='rgba(0,0,0,0.18)';ctx.beginPath();ctx.ellipse(sh.x,sh.y,22,10,0,0,Math.PI*2);ctx.fill();
@@ -819,6 +915,7 @@
       {type:'weapon',key:player.x+0.84+tortY},
       ...NPCs.map(n=>({type:'npc',n,key:n.x+n.y})),
       ...obstacles.map(ob=>({type:'ob',ob,key:ob.x+ob.y})),
+      ...trafficCars.map(c=>({type:'tcar',c,key:c.x+c.y})),
       ...STANDS.map(s=>({type:'stand',s,key:s.x+s.y})),
       ...OWNERS.map(ow=>({type:'owner',ow,key:ow.x+ow.y})),
       ...coins.map(c=>({type:'coin',c,key:c.x+c.y})),
@@ -863,6 +960,7 @@
           if(upgrades.bat) drawBat(player.x,player.y,tortZ,pSwing);
           else drawTortilla(player.x+0.84,tortY,tortZ);
         }
+      } else if(d.type==='tcar'){ drawTrafficCar(d.c);
       } else if(d.type==='ob'){ drawOb(d.ob);
       } else { // npc
         const n=d.n;
@@ -958,7 +1056,7 @@
       if(pendingAmmo){buyAmmo();pendingAmmo=false;}
       updateNPCs(dt);updateNPCSpawning(dt);updateObs();
       updateOwners(dt);updateCoins(dt);updateProjectiles(dt);
-      updateGoons(dt);updateFortresses(dt);updateTicker(dt);
+      updateGoons(dt);updateFortresses(dt);updateTraffic(dt);updateTicker(dt);
       checkUpgrades();
       if(policeIdx<POLICE_SCORES.length&&score>=POLICE_SCORES[policeIdx]){
         NPCs.push(makePolice(player.x,player.y));policeIdx++;
