@@ -172,7 +172,7 @@ function drawPaperStack(x, y, count) {
 function spawnNpc() {
   const fromLeft = Math.random() < 0.5;
   const pal = NPC_PALETTES[Math.floor(Math.random() * NPC_PALETTES.length)];
-  npcs.push({
+  const npc = {
     x:  fromLeft ? -1.2 : GRID + 0.2,
     y:  1.5 + Math.random() * (GRID - 3),
     tx: fromLeft ? GRID + 0.2 : -1.2,
@@ -180,10 +180,11 @@ function spawnNpc() {
     spd: 1.0 + Math.random() * 0.5,
     bodyC: pal[0],
     headC: pal[1],
-    state: 'walking', // 'walking' | 'sold' | 'leaving'
+    state: 'walking',
     soldTimer: 0,
     saleAmount: 0,
-  });
+  };
+  npcs.push(npc);
 }
 
 // ── Scene update ──────────────────────────────────────────
@@ -252,8 +253,7 @@ function updateNpcs(dt, st) {
 
     if (n.state === 'sold') {
       n.soldTimer -= dt;
-      // After sold animation: walk off quickly
-      if (n.soldTimer <= 0) { n.state = 'leaving'; }
+      if (n.soldTimer <= 0) { npcs.splice(i, 1); }
       continue;
     }
 

@@ -30,9 +30,9 @@ export function sellOnePiece() {
   return price * count;
 }
 
-import { INITIAL_STATE, saveGame, loadGame, deleteSave } from './state.js';
-import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner, showQualityBanner, showMilestoneBanner } from './ui.js';
-import { initScene } from './scene.js';
+import { INITIAL_STATE, saveGame, loadGame, deleteSave } from './state.js?v=3';
+import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner, showQualityBanner, showMilestoneBanner } from './ui.js?v=3';
+import { initScene } from './scene.js?v=3';
 
 // --- State ---
 
@@ -264,6 +264,6 @@ export function init() {
     if (treeEl) treeEl.hidden = false;
   });
 
-  setInterval(tick, 250);
+  setInterval(tick, 1000);
   initScene(() => state, sellOnePiece);
 }
