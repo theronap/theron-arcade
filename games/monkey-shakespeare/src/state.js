@@ -23,6 +23,7 @@ export const INITIAL_STATE = {
   monkeysStalled: false,
   purchased: [],
   manualProgress: 0,
+  pendingPieces: 0,
   lastSave: Date.now(),
   gameWon: false,
 };
@@ -61,8 +62,9 @@ export function loadGame() {
       applyOfflineProgress(save, Math.floor(elapsedSeconds));
     }
 
-    // Merge with INITIAL_STATE to fill any missing fields from older saves
-    return { ...INITIAL_STATE, ...save };
+    // Merge with INITIAL_STATE to fill any missing fields from older saves.
+    // Always reset pendingPieces — offline progress is handled separately.
+    return { ...INITIAL_STATE, ...save, pendingPieces: 0 };
   } catch {
     return null;
   }

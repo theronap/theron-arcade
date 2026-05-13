@@ -11,17 +11,17 @@ export const MANUAL_CLICKS_PER_PIECE = 10;
 export const MANUAL_PIECE_PRICE = 1.00; // "Simple Paragraph" quality
 
 export const QUALITY_TIERS = [
-  { name: 'Gibberish',          threshold: 0,    basePrice: 0.01,    sample: 'asdfkj qqpwle xmzv rtyuiop...' },
-  { name: 'Word Salad',         threshold: 0.10, basePrice: 0.05,    sample: 'The monkey run fast sky purple...' },
-  { name: 'Basic Sentences',    threshold: 0.20, basePrice: 0.25,    sample: 'The monkey ran across the green field.' },
-  { name: 'Simple Paragraph',   threshold: 0.30, basePrice: 1.00,    sample: 'The monkey sat at the old typewriter, thinking...' },
-  { name: 'Bad Short Story',    threshold: 0.40, basePrice: 5.00,    sample: 'Chapter One: The Great Banana Heist...' },
-  { name: 'Decent Short Story', threshold: 0.50, basePrice: 25.00,   sample: '"Call me Ishmael," said the monkey, adjusting his spectacles...' },
-  { name: 'Novella',            threshold: 0.60, basePrice: 100,     sample: 'It was the best of times, it was the worst of times...' },
-  { name: 'Bad Novel',          threshold: 0.70, basePrice: 500,     sample: 'A tale of two monkeys, set against the backdrop of revolution...' },
-  { name: 'Good Novel',         threshold: 0.80, basePrice: 5_000,   sample: 'The old monkey and the typewriter — a story of quiet perseverance...' },
-  { name: 'Bestseller',         threshold: 0.90, basePrice: 50_000,  sample: 'To be, or not to be... the monkey paused, reading what it had typed.' },
-  { name: 'Classic Literature', threshold: 1.0,  basePrice: 500_000, sample: "Whether 'tis nobler in the mind to suffer the slings and arrows..." },
+  { name: 'Gibberish',          threshold: 0,    basePrice: 0.10,      sample: 'asdfkj qqpwle xmzv rtyuiop...' },
+  { name: 'Word Salad',         threshold: 0.10, basePrice: 0.50,      sample: 'The monkey run fast sky purple...' },
+  { name: 'Basic Sentences',    threshold: 0.20, basePrice: 2.50,      sample: 'The monkey ran across the green field.' },
+  { name: 'Simple Paragraph',   threshold: 0.30, basePrice: 10.00,     sample: 'The monkey sat at the old typewriter, thinking...' },
+  { name: 'Bad Short Story',    threshold: 0.40, basePrice: 50.00,     sample: 'Chapter One: The Great Banana Heist...' },
+  { name: 'Decent Short Story', threshold: 0.50, basePrice: 250.00,    sample: '"Call me Ishmael," said the monkey, adjusting his spectacles...' },
+  { name: 'Novella',            threshold: 0.60, basePrice: 1_000,     sample: 'It was the best of times, it was the worst of times...' },
+  { name: 'Bad Novel',          threshold: 0.70, basePrice: 5_000,     sample: 'A tale of two monkeys, set against the backdrop of revolution...' },
+  { name: 'Good Novel',         threshold: 0.80, basePrice: 50_000,    sample: 'The old monkey and the typewriter — a story of quiet perseverance...' },
+  { name: 'Bestseller',         threshold: 0.90, basePrice: 500_000,   sample: 'To be, or not to be... the monkey paused, reading what it had typed.' },
+  { name: 'Classic Literature', threshold: 1.0,  basePrice: 5_000_000, sample: "Whether 'tis nobler in the mind to suffer the slings and arrows..." },
 ];
 
 export const DISTRIBUTION_TIERS = [
@@ -110,7 +110,7 @@ export function getQualityTier(educationRatio) {
 
 // Ticks per production cycle, floored at 1
 export function getProductionTicks(speedMultiplier) {
-  return Math.max(1, Math.floor(60 / speedMultiplier));
+  return Math.max(1, Math.floor(10 / speedMultiplier));
 }
 
 // Sum of litBonus values for all purchased sub-upgrades, minimum 1

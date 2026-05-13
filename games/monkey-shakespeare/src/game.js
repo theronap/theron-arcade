@@ -5,6 +5,22 @@ import {
   getProductionTicks, getQualityTier, getLitMultiplier, getShakespeareChance,
 } from './economy.js';
 
+// Called by scene when player sells to an NPC. Returns price earned or 0.
+export function sellOnePiece() {
+  if (!state || state.pendingPieces <= 0 || state.gameWon) return 0;
+  const edRatio = state.monkeys > 0
+    ? Math.min(state.educationCapacity, state.monkeys) / state.monkeys
+    : 0;
+  const qi = getQualityTier(edRatio);
+  const quality = QUALITY_TIERS[qi];
+  const price = quality.basePrice * DISTRIBUTION_TIERS[state.distributionTier].multiplier;
+  state.pendingPieces--;
+  state.money += price;
+  addFeedEntry(quality.name, price, 1, false);
+  updateStats(state);
+  return price;
+}
+
 import { INITIAL_STATE, saveGame, loadGame, deleteSave } from './state.js';
 import { updateStats, renderUpgrades, addFeedEntry, showWinScreen, showOfflineBanner } from './ui.js';
 import { initScene } from './scene.js';
@@ -104,19 +120,19 @@ function tick() {
 }
 
 function completePieces(count, isManual) {
-  const edRatio = state.monkeys > 0
-    ? Math.min(state.educationCapacity, state.monkeys) / state.monkeys
-    : 0;
-  const qualityIndex = isManual ? 3 : getQualityTier(edRatio); // manual = Simple Paragraph (index 3)
-  const quality = QUALITY_TIERS[qualityIndex];
-  const distMult = DISTRIBUTION_TIERS[state.distributionTier].multiplier;
-  const pricePerPiece = (isManual ? MANUAL_PIECE_PRICE : quality.basePrice) * distMult;
-
-  state.money += pricePerPiece * count;
   state.totalWords += count * WORDS_PER_PIECE;
   state.totalPieces += count;
 
-  addFeedEntry(isManual ? 'Simple Paragraph' : quality.name, pricePerPiece, count, isManual);
+  if (isManual) {
+    // Manual typing: sell immediately (player is right there)
+    const distMult = DISTRIBUTION_TIERS[state.distributionTier].multiplier;
+    const price = MANUAL_PIECE_PRICE * distMult;
+    state.money += price * count;
+    addFeedEntry('Simple Paragraph', price, count, true);
+  } else {
+    // Monkey production: queue for NPC selling via scene callback
+    state.pendingPieces += count;
+  }
 }
 
 // --- Win ---
@@ -219,5 +235,5 @@ export function init() {
   });
 
   setInterval(tick, 1000);
-  initScene(() => state);
+  initScene(() => state, sellOnePiece);
 }

@@ -46,11 +46,15 @@
     <span class="stat-value" id="stat-monkeys">0</span>
   </div>
   <div class="stat">
-    <span class="stat-label">Words Typed</span>
+    <span class="stat-label">For Sale</span>
+    <span class="stat-value pending" id="stat-pending">0</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Words</span>
     <span class="stat-value" id="stat-words">0</span>
   </div>
   <div class="stat">
-    <span class="stat-label">Pieces Sold</span>
+    <span class="stat-label">Pieces</span>
     <span class="stat-value" id="stat-pieces">0</span>
   </div>
 </div>
@@ -64,91 +68,80 @@
   <div class="progress-track">
     <div class="progress-fill amber" id="words-progress"></div>
   </div>
-  <div class="meter-labels">
-    <span>Words gate: 0 / 1M</span>
-    <span id="words-gate-label"></span>
-  </div>
 </div>
 
-<!-- Main layout -->
+<!-- Main 3-column layout -->
 <main>
 
-  <!-- Left: typewriter + feed -->
-  <section id="left-panel">
+  <!-- Left: controls -->
+  <aside id="controls-col">
 
-    <!-- Isometric game scene -->
-    <canvas id="game-scene"></canvas>
-
-
-    <!-- Manual typing -->
     <div class="card" id="typewriter-card">
       <h2>Your Typewriter</h2>
-      <p class="card-meta">Simple Paragraph quality · <span id="manual-price">$1.00</span> / piece</p>
+      <p class="card-meta">Simple Paragraph · <span id="manual-price">$1.00</span> / piece</p>
       <div class="progress-track">
         <div class="progress-fill green" id="manual-progress-bar"></div>
       </div>
-      <p class="progress-label"><span id="manual-progress-text">Click to type</span></p>
       <button id="type-btn" class="big-btn">⌨ TYPE</button>
     </div>
 
-    <!-- Monkey production -->
     <div class="card" id="production-card">
       <h2>Monkey Production</h2>
       <div class="monkey-stats">
-        <span>Output quality: <strong id="monkey-quality">—</strong></span>
-        <span>Selling via: <strong id="dist-name">Street Corner</strong></span>
+        <span>Quality: <strong id="monkey-quality">—</strong></span>
+        <span>Via: <strong id="dist-name">Street Corner</strong></span>
         <span>Price: <strong id="monkey-price">—</strong></span>
-        <span>Banana supply: <strong id="banana-tier-name">Manual</strong></span>
+        <span>Bananas: <strong id="banana-tier-name">Manual</strong></span>
       </div>
       <div class="progress-track">
         <div class="progress-fill amber" id="production-progress"></div>
       </div>
-      <p class="progress-label">Production cycle progress</p>
+      <p class="progress-label">Production cycle</p>
     </div>
 
-    <!-- Banana manual buy -->
     <div class="card" id="banana-card">
       <h2>Bananas 🍌</h2>
-      <p class="card-meta">50 bananas for $0.50 · Each monkey eats 1 banana every 10 seconds</p>
+      <p class="card-meta">50 bananas for $0.50</p>
       <button id="buy-bananas-btn" class="action-btn">Buy 50 Bananas ($0.50)</button>
     </div>
 
-    <!-- Output feed -->
-    <div class="card" id="feed-card">
-      <h2>Output Feed</h2>
+    <footer>
+      <button id="reset-btn" class="danger-btn">↺ New Game</button>
+    </footer>
+
+  </aside>
+
+  <!-- Center: isometric scene (hero) -->
+  <div id="scene-col">
+    <canvas id="game-scene"></canvas>
+
+    <!-- Output feed overlaid at bottom of scene -->
+    <div id="feed-overlay">
+      <div class="feed-header">Output Feed</div>
       <div id="output-feed">
-        <div class="feed-empty">Start typing to produce your first piece...</div>
+        <div class="feed-empty">Start typing to produce your first piece…</div>
       </div>
     </div>
-
-  </section>
+  </div>
 
   <!-- Right: upgrades -->
-  <section id="right-panel">
+  <aside id="upgrades-col">
     <div id="upgrade-panel">
       <h2>Upgrades</h2>
-
-      <!-- Tabs -->
       <div class="tabs">
         <button class="tab-btn active" data-tree="production">Production</button>
         <button class="tab-btn" data-tree="education">Education</button>
         <button class="tab-btn" data-tree="banana">Bananas</button>
         <button class="tab-btn" data-tree="distribution">Distribution</button>
       </div>
-
       <div id="upgrades-production" class="upgrade-tree"></div>
       <div id="upgrades-education"  class="upgrade-tree" hidden></div>
       <div id="upgrades-banana"     class="upgrade-tree" hidden></div>
       <div id="upgrades-distribution" class="upgrade-tree" hidden></div>
     </div>
-  </section>
+  </aside>
 
 </main>
-
-<!-- Footer controls -->
-<footer>
-  <button id="reset-btn" class="danger-btn">↺ New Game</button>
-</footer>
 
 <!-- Win overlay -->
 <div id="win-overlay" class="overlay" hidden>

@@ -10,6 +10,7 @@ export function updateStats(state) {
   setText('stat-money', formatMoney(state.money));
   setText('stat-bananas', formatNumber(state.bananas));
   setText('stat-monkeys', formatNumber(state.monkeys));
+  setText('stat-pending', formatNumber(state.pendingPieces ?? 0));
   setText('stat-words', formatNumber(state.totalWords));
   setText('stat-pieces', formatNumber(state.totalPieces));
 
